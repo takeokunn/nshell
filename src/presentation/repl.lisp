@@ -39,6 +39,10 @@
   "Read a single character from standard input, or NIL on EOF."
   (read-char *standard-input* nil nil))
 
+(defstruct fish-input-state
+  (buffer "" :type string)
+  (pos 0 :type integer))
+
 (defun fish-input-loop (history kb config)
   "Fish-style interactive input loop with non-destructive rendering."
   (let ((state (make-fish-input-state)))
