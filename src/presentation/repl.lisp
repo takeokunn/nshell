@@ -51,4 +51,4 @@
                                   (format t "nshell: command not found: ~a~%" cmd))))))))
                  (error (e)
                    (format t "nshell error: ~a~%" e))))))
-  (format t "Goodbye!~%"))
+  (format t "Goodbye!~%")))
