@@ -14,29 +14,22 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          sbcl = pkgs.sbcl;
         in
         {
-          default = pkgs.stdenv.mkDerivation {
+          default = pkgs.sbcl.buildASDFSystem {
             pname = "nshell";
             version = "0.1.0";
             src = ./.;
-
-            nativeBuildInputs = [ sbcl ];
-
-            buildPhase = ''
-              export HOME=$TMPDIR
-              sbcl --noinform --non-interactive \
-                --eval '(require :asdf)' \
-                --eval '(push (truename "./") asdf:*central-registry*)' \
-                --eval '(asdf:load-system :nshell)' \
-                --eval '(sb-ext:save-lisp-and-die "nshell" :executable t :compression t :toplevel (quote nshell:main))'
-            '';
-
-            installPhase = ''
-              mkdir -p $out/bin
-              cp nshell $out/bin/
-              chmod +x $out/bin/nshell
+            systems = [ "nshell" ];
+            lispLibs = [];
+            buildScript = pkgs.writeText "build-nshell.lisp" ''
+              (require :asdf)
+              (push (truename "./") asdf:*central-registry*)
+              (asdf:load-system :nshell)
+              (sb-ext:save-lisp-and-die "nshell"
+                :executable t
+                :compression t
+                :toplevel #'nshell:main)
             '';
           };
         });
@@ -44,7 +37,7 @@
       apps = forAllSystems (system: {
         default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/nshell";
+          program = "${self.packages.${system}.default}/nshell";
         };
       });
 
