@@ -67,7 +67,10 @@
    (:file "unit/test-configuration")
    (:file "unit/test-tokenizer")
    (:file "unit/test-unification")
-   (:file "unit/test-parser"))
+   (:file "unit/test-parser")
+   (:file "integration/test-pipeline")
+   (:file "e2e/test-smoke"))
   :perform (test-op (o s)
+             (declare (ignore o s))
              (uiop:symbol-call :fiveam '#:run!
                                (uiop:find-symbol* '#:nshell-tests :nshell/test))))
