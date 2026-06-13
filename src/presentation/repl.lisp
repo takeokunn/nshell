@@ -42,7 +42,8 @@
            (cond
              ((nshell.domain.parsing:pipeline-node-p ast)
               (nshell.infrastructure.acl:spawn-pipeline (nshell.domain.parsing:pipeline-node-commands ast)))
-             ((and cmd (execute-builtin ast)))
+             ((and cmd (let ((cleaned-ast (nshell.domain.parsing:make-command-node cmd args)))
+                         (execute-builtin cleaned-ast))))
              ((and cmd) (nshell.infrastructure.acl:run-external cmd args))
              (t (format t "nshell: cannot execute~%"))))
       (nshell.infrastructure.acl:restore-redirects))))
