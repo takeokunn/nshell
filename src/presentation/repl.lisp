@@ -253,3 +253,26 @@
        (trampoline (lambda () (render-prompt-cont)))
     (nshell.infrastructure.terminal:restore-terminal-mode)
     (format t "Goodbye!~%")))
+
+;; ── Batch Mode ──────────────────────────────────────────
+(defun run-repl-batch ()
+  "Batch (non-interactive) mode: read lines, execute commands, print raw output."
+  (setf *running* t *last-exit-code* 0
+        *environment* (nshell.domain.environment:make-default-environment))
+  (setf nshell.domain.expansion:*glob-directory-files-fn*
+        (lambda (dir) (uiop:directory-files dir)))
+  (setf nshell.domain.expansion:*glob-subdirectories-fn*
+        (lambda (dir) (uiop:subdirectories dir)))
+  (loop for line = (read-line *standard-input* nil nil)
+        while (and line *running*)
+        do (handler-case
+               (let ((result (nshell.domain.parsing:parse-command-line line)))
+                 (when (nshell.domain.parsing:parse-complete-p result)
+                   (setf nshell.infrastructure.acl:*exported-environment*
+                         (mapcar (lambda (pair) (format nil "~a=~a" (car pair) (cdr pair)))
+                                 (nshell.domain.environment:env-list *environment*)))
+                   (let ((ast (nshell.domain.parsing:parse-result-ast result)))
+                     (setf *last-exit-code* (or (execute-ast ast) 0)))))
+             (error (e)
+               (format *error-output* "nshell error: ~a~%" e)
+               (setf *last-exit-code* 1)))))
