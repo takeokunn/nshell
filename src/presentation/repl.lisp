@@ -104,14 +104,15 @@
             (code 0))
        (loop for cmd in cmds for i from 0
              for sep = (and seps (< i (length seps)) (nth i seps))
+             for prev-sep = (and (> i 0) (nth (1- i) seps))
              for bg-p = (eq :amp sep)
-             ;; && and || conditional execution
+             ;; && and ||: check PREVIOUS separator for conditional execution
              for should-run = (or (= i 0)
-                                  (not sep)
-                                  (eq :semi sep)
-                                  (eq :amp sep)
-                                  (and (eq :and sep) (= code 0))
-                                  (and (eq :or sep) (/= code 0)))
+                                  (not prev-sep)
+                                  (eq :semi prev-sep)
+                                  (eq :pipe prev-sep)
+                                  (and (eq :and prev-sep) (= code 0))
+                                  (and (eq :or prev-sep) (/= code 0)))
              do (when should-run
                   (if bg-p
                       (let ((proc (nshell.infrastructure.acl:spawn-async
