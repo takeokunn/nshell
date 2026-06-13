@@ -2,7 +2,7 @@
 
 (defun tty-p ()
   "Return T if standard input is a terminal (interactive mode)."
-  #+sbcl (sb-unix:unix-isatty 0)
+  #+sbcl (= 1 (sb-unix:unix-isatty 0))
   #-sbcl nil)
 
 (defun main ()

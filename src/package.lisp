@@ -59,7 +59,7 @@
   (:export #:env-var #:env-var-p #:make-env-var
            #:env-var-name #:env-var-value #:env-var-exported-p
            #:environment #:environment-p #:make-environment
-           #:environment-vars #:make-default-environment
+           #:environment-vars #:make-default-environment #:inject-os-environment
            #:env-get #:env-set #:env-unset #:env-export #:env-list))
 
 (defpackage #:nshell.domain.expansion

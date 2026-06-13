@@ -119,13 +119,15 @@
                       (let ((proc (nshell.infrastructure.acl:spawn-async
                                    (nshell.domain.parsing:command-node-command cmd)
                                    (expand-arg-list (nshell.domain.parsing:command-node-args cmd)))))
-                        (when proc
-                          (let* ((job (make-job-from-ast cmd (nshell.domain.parsing:command-node-command cmd)))
-                                 (jid (nshell.domain.job-control:monitor-add-job nshell.application:*job-monitor* job)))
-                            (setf (nshell.domain.execution:job-pids job) (list (sb-ext:process-pid proc)))
-                            (setf (nshell.domain.execution:job-background-p job) t)
-                            (nshell.domain.job-control:monitor-update nshell.application:*job-monitor* jid :running)
-                            (format t "[~d] ~d~%" jid (sb-ext:process-pid proc)))))
+                         (when proc
+                           (let* ((pid (sb-ext:process-pid proc))
+                                  (job (make-job-from-ast cmd (nshell.domain.parsing:command-node-command cmd)))
+                                  (jid (nshell.domain.job-control:monitor-add-job nshell.application:*job-monitor* job)))
+                             (setf (nshell.domain.execution:job-pids job) (list pid))
+                             (setf (nshell.domain.execution:job-pgid job) pid)
+                             (setf (nshell.domain.execution:job-background-p job) t)
+                             (nshell.domain.job-control:monitor-update nshell.application:*job-monitor* jid :running)
+                             (format t "[~d] ~d~%" jid pid))))
                       (setf code (or (execute-ast cmd) 0)))))
        code))
     ((nshell.domain.parsing:pipeline-node-p ast)
@@ -161,7 +163,10 @@
         else append (nshell.domain.expansion:expand-all val (ensure-environment))))
 
 (defun ensure-environment ()
-  (or *environment* (setf *environment* (nshell.domain.environment:make-default-environment))))
+  (or *environment*
+      (setf *environment*
+            (nshell.domain.environment:inject-os-environment
+             (nshell.domain.environment:make-default-environment)))))
 
 ;; CPS Rendering
 (defun render-prompt-cont ()
@@ -230,7 +235,7 @@
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-knowledge-base)
         *input-state* (make-input-state)
-        *environment* (nshell.domain.environment:make-default-environment))
+        *environment* (nshell.domain.environment:inject-os-environment (nshell.domain.environment:make-default-environment)))
   ;; Wire domain expansion to infrastructure (DDD purity)
   (setf nshell.domain.expansion:*glob-directory-files-fn*
         (lambda (dir) (uiop:directory-files dir)))
@@ -259,7 +264,7 @@
 (defun run-repl-batch ()
   "Batch (non-interactive) mode: read lines, execute commands, print raw output."
   (setf *running* t *last-exit-code* 0
-        *environment* (nshell.domain.environment:make-default-environment))
+        *environment* (nshell.domain.environment:inject-os-environment (nshell.domain.environment:make-default-environment)))
   (setf nshell.domain.expansion:*glob-directory-files-fn*
         (lambda (dir) (uiop:directory-files dir)))
   (setf nshell.domain.expansion:*glob-subdirectories-fn*

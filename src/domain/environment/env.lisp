@@ -24,18 +24,29 @@
     copy))
 
 (defun make-default-environment ()
-  "Create a default shell environment using OS environment variables.
-   Falls back to safe defaults when variables are unset (e.g. in Nix sandbox)."
-  (let ((env (make-environment))
-        (cwd (handler-case (namestring (uiop:getcwd)) (error () "/"))))
-    ;; Core variables with fallbacks
-    (setf env (env-set env "HOME" (or (uiop:getenv "HOME") "/") t))
-    (setf env (env-set env "PATH" (or (uiop:getenv "PATH") "/bin:/usr/bin") t))
-    (setf env (env-set env "USER" (or (uiop:getenv "USER") "nobody") t))
-    (setf env (env-set env "PWD" (or (uiop:getenv "PWD") cwd) t))
-    (setf env (env-set env "SHELL" (or (uiop:getenv "SHELL") "/bin/sh") t))
-    (setf env (env-set env "TERM" (or (uiop:getenv "TERM") "dumb") t))
+  "Create a default environment with fallback values.
+   Pure domain function - callers should provide OS values via inject-os-environment."
+  (let ((env (make-environment)))
+    (setf env (env-set env "HOME" "/" t))
+    (setf env (env-set env "PATH" "/bin:/usr/bin" t))
+    (setf env (env-set env "USER" "nobody" t))
+    (setf env (env-set env "PWD" "/" t))
+    (setf env (env-set env "SHELL" "/bin/sh" t))
+    (setf env (env-set env "TERM" "dumb" t))
     env))
+
+(defun inject-os-environment (env)
+  "Inject OS environment values into ENV. Used by infrastructure layer.
+   Returns a new environment with OS values overwriting defaults."
+  (let ((result env))
+    (flet ((os-or (name default) (or (uiop:getenv name) default)))
+      (setf result (env-set result "HOME" (or (uiop:getenv "HOME") (env-get result "HOME")) t))
+      (setf result (env-set result "PATH" (or (uiop:getenv "PATH") (env-get result "PATH")) t))
+      (setf result (env-set result "USER" (or (uiop:getenv "USER") (env-get result "USER")) t))
+      (setf result (env-set result "PWD" (handler-case (namestring (uiop:getcwd)) (error () (env-get result "PWD"))) t))
+      (setf result (env-set result "SHELL" (or (uiop:getenv "SHELL") (env-get result "SHELL")) t))
+      (setf result (env-set result "TERM" (or (uiop:getenv "TERM") (env-get result "TERM")) t)))
+  result))
 
 (defun env-get (env name)
   "Return the value of NAME in ENV, or NIL when it is not defined."
