@@ -23,7 +23,7 @@
 
 (defpackage #:nshell.domain.signals
   (:use #:cl)
-  (:export #:make-signal #:signal-name #:signal-number #:signal=
+  (:export #:make-signal #:signal-name #:signal-number #:signal-p #:signal=
            #:+sigint+ #:+sigterm+ #:+sigtstp+ #:+sigcont+ #:+sigchld+))
 
 (defpackage #:nshell.domain.execution
