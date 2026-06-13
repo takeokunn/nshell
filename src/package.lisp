@@ -23,7 +23,8 @@
   (:export #:make-command #:command-name #:command-args
            #:make-pipeline #:pipeline-commands
            #:make-job #:job-id #:job-state #:job-pipeline
-           #:job-state-valid-p))
+           #:job-state-valid-p #:job-state-transition
+           #:job-state-kw #:job-exit-code))
 
 (defpackage #:nshell.domain.parsing
   (:use #:cl)
