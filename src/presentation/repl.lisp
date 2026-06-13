@@ -63,9 +63,9 @@
       ((string= cmd "ls") (handler-case (dolist (f (uiop:directory-files (uiop:getcwd))) (format t "~a~%" (file-namestring f))) (error (e) (format t "ls: ~a~%" e))) (values t 0))
       ((string= cmd "cd") (if args (handler-case (uiop:chdir (first args)) (error (e) (format t "cd: ~a~%" e) (values t 1))) (values t 0)))
       ((string= cmd "exit") (setf *running* nil) (values t 0))
-      ((string= cmd "fg") (nshell.application:fg (if args (parse-integer (first args) :junk-allowed t) 0)) (values t 0))
-      ((string= cmd "bg") (nshell.application:bg (if args (parse-integer (first args) :junk-allowed t) 0)) (values t 0))
-      ((string= cmd "jobs") (nshell.application:jobs) (values t 0))
+      ((string= cmd "fg") (reap-background-jobs) (nshell.application:fg (if args (parse-integer (first args) :junk-allowed t) 0)) (values t 0))
+      ((string= cmd "bg") (reap-background-jobs) (nshell.application:bg (if args (parse-integer (first args) :junk-allowed t) 0)) (values t 0))
+      ((string= cmd "jobs") (reap-background-jobs) (nshell.application:jobs) (values t 0))
       ((string= cmd "set")
        (cond
          ((and (>= (length args) 1) (string= (first args) "-x") (>= (length args) 3))
