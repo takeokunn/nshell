@@ -17,6 +17,21 @@
 (defvar *environment* nil)
 (defvar *aliases* (make-hash-table :test #'equal))
 (defvar *abbreviations* (make-hash-table :test #'equal))
+(defvar *proc-registry* (make-hash-table :test #'eql)
+  "Maps job-id -> SBCL process object for status checking.")
+
+;; Background job reaping
+(defun register-background-proc (job-id proc)
+  (setf (gethash job-id *proc-registry*) proc))
+
+(defun reap-background-jobs ()
+  (maphash (lambda (jid proc)
+             (when (and proc (not (sb-ext:process-alive-p proc)))
+               (nshell.domain.job-control:monitor-update
+                nshell.application:*job-monitor* jid :completed
+                (or (sb-ext:process-exit-code proc) 0))
+               (remhash jid *proc-registry*)))
+           *proc-registry*))
 
 ;; Redirect helpers
 (defun extract-redirects (args)
@@ -127,6 +142,7 @@
                              (setf (nshell.domain.execution:job-pgid job) pid)
                              (setf (nshell.domain.execution:job-background-p job) t)
                              (nshell.domain.job-control:monitor-update nshell.application:*job-monitor* jid :running)
+                             (register-background-proc jid proc)
                              (format t "[~d] ~d~%" jid pid))))
                       (setf code (or (execute-ast cmd) 0)))))
        code))
@@ -172,7 +188,7 @@
 (defun render-prompt-cont ()
   (unless *running* (return-from render-prompt-cont (done)))
   ;; Reap completed children and update job states
-  (nshell.application:reap-current-jobs nshell.application:*job-monitor*)
+  (reap-background-jobs)
   (nshell.infrastructure.terminal:ansi-clear-line) (format t "~c" #\Return)
   (render-prompt *config* *last-exit-code*)
   (let* ((text (input-state-buffer *input-state*)) (theme (nshell.domain.configuration:config-theme *config*)))

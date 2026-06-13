@@ -112,7 +112,7 @@
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
             #:execute-pipeline-cps
             #:execute-external
-            #:fg #:bg #:jobs #:disown #:interrupt-foreground #:reap-current-jobs #:suspend-foreground
+            #:fg #:bg #:jobs #:disown #:interrupt-foreground #:suspend-foreground
             #:history-suggestion #:search-history-use-case))
 
 ;; -- Infrastructure packages --------------------------------

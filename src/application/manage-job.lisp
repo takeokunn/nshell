@@ -98,9 +98,7 @@
         job))))
 
 (defun jobs ()
-  "Print and return current jobs. Reaps completed children first."
-  ;; Reap completed children before displaying state
-  (nshell.application::reap-current-jobs *job-monitor*)
+  "Print and return current jobs."
   (let ((jobs (nshell.domain.job-control:monitor-jobs *job-monitor*)))
     (dolist (job jobs)
       (format t "[~d] ~a ~a~%"
@@ -108,20 +106,6 @@
               (%status-label job)
               (%job-command-string job)))
     jobs))
-
-(defun reap-current-jobs (monitor)
-  "Reap completed child processes and update job states in MONITOR."
-  (handler-case
-      (dolist (r (nshell.infrastructure.acl:reap-children))
-        (let ((pid (car r)))
-          (dolist (job (nshell.domain.job-control:monitor-jobs monitor))
-            (when (and (nshell.domain.execution:job-background-p job)
-                       (member pid (nshell.domain.execution:job-pids job)))
-              (nshell.domain.job-control:monitor-update
-               monitor (nshell.domain.execution:job-id job) :completed (cdr r))
-              (setf (nshell.domain.execution:job-pids job)
-                    (remove pid (nshell.domain.execution:job-pids job)))))))
-    (error ())))
 
 (defun disown (job-id)
   "Remove JOB-ID from the job monitor."
