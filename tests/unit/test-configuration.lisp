@@ -1,0 +1,56 @@
+(in-package #:nshell/test)
+
+(def-suite configuration-domain-tests
+  :description "Configuration and prompt domain tests"
+  :in nshell-tests)
+
+(in-suite configuration-domain-tests)
+
+(test default-theme-creation
+  "Default theme has all expected colors"
+  (let ((theme (nshell.domain.configuration:default-theme)))
+    (is (nshell.domain.configuration:theme-p theme))
+    (is (stringp (nshell.domain.configuration:theme-color theme :command)))
+    (is (stringp (nshell.domain.configuration:theme-color theme :error)))
+    (is (stringp (nshell.domain.configuration:theme-color theme :autosuggestion)))))
+
+(test theme-color-missing
+  "Unknown color keys return nil"
+  (let ((theme (nshell.domain.configuration:default-theme)))
+    (is (null (nshell.domain.configuration:theme-color theme :nonexistent)))))
+
+(test theme-set-color
+  "Can set and retrieve custom color"
+  (let ((theme (nshell.domain.configuration:make-theme :name "test")))
+    (nshell.domain.configuration:theme-set-color theme :custom "FF00FF")
+    (is (string= "FF00FF" (nshell.domain.configuration:theme-color theme :custom)))))
+
+(test default-config
+  "Default config has sensible values"
+  (let ((cfg (nshell.domain.configuration:default-config)))
+    (is (nshell.domain.configuration:config-p cfg))
+    (is (nshell.domain.configuration:theme-p (nshell.domain.configuration:config-theme cfg)))))
+
+(test prompt-model-creation
+  "Prompt model can be created"
+  (let ((pm (nshell.domain.prompting:make-prompt-model
+             :hostname "myhost" :cwd "/home/user" :exit-code 0)))
+    (is (string= "myhost" (nshell.domain.prompting:prompt-hostname pm)))
+    (is (string= "/home/user" (nshell.domain.prompting:prompt-cwd pm)))
+    (is (= 0 (nshell.domain.prompting:prompt-exit-code pm)))))
+
+(test render-prompt-model-default
+  "Rendering prompt model produces non-empty result"
+  (let* ((pm (nshell.domain.prompting:make-prompt-model
+              :hostname "test" :cwd "/tmp" :exit-code 0))
+         (result (nshell.domain.prompting:render-prompt-model pm)))
+    (is (consp result))
+    (is (consp (car result)))
+    (is (stringp (caar result)))))
+
+(test prompt-with-error-exit-code
+  "Prompt model with non-zero exit code renders correctly"
+  (let* ((pm (nshell.domain.prompting:make-prompt-model
+              :hostname "test" :cwd "/" :exit-code 1))
+         (result (nshell.domain.prompting:render-prompt-model pm)))
+    (is (consp result))))

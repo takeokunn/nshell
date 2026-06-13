@@ -54,7 +54,8 @@
 
 (defpackage #:nshell.domain.configuration
   (:use #:cl)
-  (:export #:make-theme #:theme-color #:theme-name
+  (:export #:make-theme #:theme-color #:theme-name #:theme-set-color
+           #:theme-p #:config-p
            #:make-config #:config-theme #:config-prompt
            #:default-theme #:default-config))
 
