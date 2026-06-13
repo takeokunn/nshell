@@ -3,7 +3,7 @@
 
 (defun run-external (cmd args)
   (handler-case
-      (let ((proc (sb-ext:run-program cmd args :output :stream :error :output :wait t :search t)))
+      (let ((proc (sb-ext:run-program cmd args :input *standard-input* :output :stream :error :output :wait t :search t)))
         (when proc
           (let ((out (sb-ext:process-output proc)))
             (when out (loop for line = (read-line out nil nil) while line do (write-line line))))
@@ -15,7 +15,7 @@
     (loop for i from 0 below n for cmd-node in commands
           for cmd = (nshell.domain.parsing:command-node-command cmd-node)
           for args = (nshell.domain.parsing:command-node-args cmd-node)
-          do (let ((proc (handler-case (sb-ext:run-program cmd args :input (if prev-output :stream t) :output :stream :error :output :wait nil :search t)
+          do (let ((proc (handler-case (sb-ext:run-program cmd args :input (if prev-output :stream t) :input *standard-input* :output :stream :error :output :wait nil :search t)
                             (error (err) (format *error-output* "nshell: ~a: ~a~%" cmd err) nil))))
                (when proc
                  (when prev-output (let ((in (sb-ext:process-input proc))) (when in (handler-case (loop for line = (read-line prev-output nil nil) while line do (write-line line in)) (error ())) (close in))))
