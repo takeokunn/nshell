@@ -32,7 +32,6 @@
   (partial-text "" :type string :read-only t)
   (kind :unknown :type keyword :read-only t))
 
-(defun ast-node-type (node) (ast-node-type-slot node))
 
 (defun ast-complete-p (node)
   (not (or (error-node-p node) (incomplete-node-p node))))
