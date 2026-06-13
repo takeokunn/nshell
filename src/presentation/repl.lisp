@@ -53,18 +53,20 @@ redirects is a list of (op . target) pairs where op is :> :>> or :<."
         (t nil)))))
 
 (defun execute-ast (ast)
-  (cond
-    ((nshell.domain.parsing:pipeline-node-p ast)
-     (nshell.infrastructure.acl:spawn-pipeline
-      (nshell.domain.parsing:pipeline-node-commands ast)))
-    ((nshell.domain.parsing:command-node-p ast)
-     (or (execute-builtin ast)
-         (let* ((cmd (nshell.domain.parsing:command-node-command ast))
-                (args (nshell.domain.parsing:command-node-args ast)))
-           (multiple-value-bind (clean-args redirects) (extract-redirects args)
-             (apply-redirects redirects)
-             (nshell.infrastructure.acl:run-external cmd clean-args)))))
-    (t (format t "nshell: cannot execute~%"))))
+  (unwind-protect
+       (cond
+         ((nshell.domain.parsing:pipeline-node-p ast)
+          (nshell.infrastructure.acl:spawn-pipeline
+           (nshell.domain.parsing:pipeline-node-commands ast)))
+         ((nshell.domain.parsing:command-node-p ast)
+          (or (execute-builtin ast)
+              (let* ((cmd (nshell.domain.parsing:command-node-command ast))
+                     (args (nshell.domain.parsing:command-node-args ast)))
+                (multiple-value-bind (clean-args redirects) (extract-redirects args)
+                  (apply-redirects redirects)
+                  (nshell.infrastructure.acl:run-external cmd clean-args)))))
+         (t (format t "nshell: cannot execute~%")))
+    (nshell.infrastructure.acl:restore-redirects)))
 
 (defun apply-redirects (redirects)
   "Apply shell redirects to standard streams."
@@ -121,32 +123,25 @@ redirects is a list of (op . target) pairs where op is :> :>> or :<."
                  (error (err)
                    (format t "nshell error: ~a~%" err)))))
            (return))
-          ((char= ch #\Tab)
+           ((char= ch #\Tab)
            (let ((text (fish-input-state-buffer state)))
              (when (> (length text) 0)
                (let* ((candidates (nshell.domain.completion:complete kb text))
-                      (old-cands (fish-input-state-last-candidates state)))
-                 ;; Reset index if candidates changed
-                 (unless (equal candidates old-cands)
-                   (setf (fish-input-state-completion-index state) -1))
-                 (if candidates
-                     (progn
-                       ;; Cycle to next candidate
-                       (let* ((n (length candidates))
-                              (idx (mod (1+ (fish-input-state-completion-index state)) n)))
-                         (setf (fish-input-state-completion-index state) idx)
-                         (setf (fish-input-state-buffer state)
-                               (nshell.domain.completion:candidate-text (nth idx candidates))))
-                       (setf (fish-input-state-last-candidates state) candidates)
-                       ;; Show candidates list
-                       (render-completions candidates)
-                       (nshell.infrastructure.terminal:ansi-clear-line)
-                       (format t "~c" #\Return)
-                       (render-prompt config nil)
-                       (format t "~a" (fish-input-state-buffer state)))
-                     ;; No candidates - reset
-                     (setf (fish-input-state-completion-index state) -1
-                           (fish-input-state-last-candidates state) nil))))))
+                      (cand-texts (mapcar #'nshell.domain.completion:candidate-text candidates))
+                      (old-texts (fish-input-state-last-candidates state)))
+                 (unless (equal cand-texts old-texts)
+                   (setf (fish-input-state-completion-index state) -1
+                         (fish-input-state-last-candidates state) cand-texts))
+                 (when candidates
+                   (let* ((n (length candidates))
+                          (idx (mod (1+ (fish-input-state-completion-index state)) n)))
+                     (setf (fish-input-state-completion-index state) idx)
+                     (setf (fish-input-state-buffer state) (nth idx cand-texts))
+                     (render-completions candidates)
+                     (nshell.infrastructure.terminal:ansi-clear-line)
+                     (format t "~c" #\Return)
+                     (render-prompt config nil)
+                     (format t "~a" (fish-input-state-buffer state)))))))
           ((char= ch #\Backspace)
            (let ((text (fish-input-state-buffer state)))
              (when (> (length text) 0)

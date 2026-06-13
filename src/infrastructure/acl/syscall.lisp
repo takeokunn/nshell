@@ -2,7 +2,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :sb-posix))
 
-(defun copy-stream (in out)
+(defun copy-stream-bytes-bytes (in out)
   (let ((buf (make-array 4096 :element-type '(unsigned-byte 8))))
     (loop for n = (read-sequence buf in)
           while (plusp n)
@@ -16,7 +16,7 @@
         (when proc
           (let ((out (sb-ext:process-output proc)))
             (when out
-              (handler-case (copy-stream out *standard-output*)
+              (handler-case (copy-stream-chars out *standard-output*)
                 (error ()))))
           (let ((code (sb-ext:process-exit-code proc)))
             (or code 0))))
@@ -45,14 +45,14 @@
                  (when prev-output
                    (let ((in (sb-ext:process-input proc)))
                      (when in
-                       (handler-case (copy-stream prev-output in) (error ()))
+                       (handler-case (copy-stream-bytes prev-output in) (error ()))
                        (close in))))
                  (push proc procs)
                  (setf prev-output (sb-ext:process-output proc)))))
     (let ((exit 0))
       (dolist (proc (reverse procs))
         (when prev-output
-          (handler-case (copy-stream prev-output *standard-output*) (error ()))
+          (handler-case (copy-stream-chars prev-output *standard-output*) (error ()))
           (setf prev-output nil))
         (sb-ext:process-wait proc)
         (setf exit (or (sb-ext:process-exit-code proc) 0)))
@@ -81,3 +81,9 @@
     (close *standard-input*)
     (setf *standard-input* *redirected-stdin*)
     (setf *redirected-stdin* nil)))
+
+(defun copy-stream-chars (in out)
+  "Copy characters from IN to OUT."
+  (loop for line = (read-line in nil nil)
+        while line
+        do (write-line line out)))
