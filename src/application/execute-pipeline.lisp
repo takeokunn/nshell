@@ -1,5 +1,8 @@
 (in-package #:nshell.application)
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :sb-posix))
+
 (defun execute-command-line (line history dispatcher)
   (declare (ignore dispatcher))
   (let ((result (nshell.domain.parsing:parse-command-line line)))
