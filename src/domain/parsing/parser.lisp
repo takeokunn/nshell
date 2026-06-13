@@ -55,7 +55,11 @@
            (separators (mapcar #'cdr cmd-list))
            (ast (cond
                   ((null cmds) nil)
-                  ((= (length cmds) 1) (first cmds))
+                  ((= (length cmds) 1)
+                   ;; Trailing & / ; / | for single command → preserve as sequence
+                   (if (eq :amp (first separators))
+                       (make-sequence-node cmds '(:amp))
+                       (first cmds)))
                   ;; All pipe: single pipeline
                   ((every (lambda (s) (eq :pipe s)) (butlast separators))
                    (make-pipeline-node cmds))
