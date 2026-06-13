@@ -53,16 +53,28 @@
     (let* ((cmd-list (nreverse all-cmds))
            (cmds (mapcar #'car cmd-list))
            (separators (mapcar #'cdr cmd-list))
+           (last-sep (car (last separators)))
            (ast (cond
                   ((null cmds) nil)
                   ((= (length cmds) 1)
-                   ;; Trailing & / ; / | for single command → preserve as sequence
+                   ;; Trailing & for single command → preserve as sequence
                    (if (eq :amp (first separators))
                        (make-sequence-node cmds '(:amp))
                        (first cmds)))
-                  ;; All pipe: single pipeline
+                  ;; All pipe: single pipeline, but check for trailing &
+                  ((and (every (lambda (s) (eq :pipe s)) (butlast separators))
+                        (eq :amp last-sep))
+                   (make-sequence-node (list (make-pipeline-node cmds)) '(:amp)))
+                  ;; All pipe: single pipeline (no trailing &)
                   ((every (lambda (s) (eq :pipe s)) (butlast separators))
                    (make-pipeline-node cmds))
+                  ;; All non-pipe with trailing & → wrap in sequence
+                  ((and (every (lambda (s) (not (eq :pipe s))) (butlast separators))
+                        (eq :amp last-sep))
+                   (make-sequence-node cmds separators))
+                  ;; All non-pipe: flat sequence
+                  ((every (lambda (s) (not (eq :pipe s))) (butlast separators))
+                   (make-sequence-node cmds (butlast separators)))
                   ;; All non-pipe: flat sequence
                   ((every (lambda (s) (not (eq :pipe s))) (butlast separators))
                    (make-sequence-node cmds (butlast separators)))

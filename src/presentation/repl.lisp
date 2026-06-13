@@ -146,9 +146,23 @@
                              (format t "[~d] ~d~%" jid pid))))
                       (setf code (or (execute-ast cmd) 0)))))
        code))
-    ((nshell.domain.parsing:pipeline-node-p ast)
-     ;; Route through application layer for CPS pipeline execution
-     (nshell.application:execute-pipeline ast))
+     ((nshell.domain.parsing:pipeline-node-p ast)
+      ;; Expand args and apply redirects per pipeline stage, then execute with env
+      (let* ((cmds (nshell.domain.parsing:pipeline-node-commands ast))
+             (expanded-cmds
+              (loop for cmd in cmds
+                    collect (let* ((raw-args (nshell.domain.parsing:command-node-args cmd))
+                                   (exp-args (expand-arg-list (loop for a in raw-args
+                                                                    collect (nshell.domain.parsing:arg-value a))))
+                                   (redirects nil))
+                              (multiple-value-bind (clean r) (extract-redirects exp-args)
+                                (apply-redirects r)
+                                (nshell.domain.parsing:make-command-node
+                                 (nshell.domain.parsing:command-node-command cmd)
+                                 clean))))))
+        (unwind-protect
+             (nshell.infrastructure.acl:spawn-pipeline expanded-cmds)
+          (nshell.infrastructure.acl:restore-redirects))))
     ((nshell.domain.parsing:command-node-p ast) (execute-command-node ast))
     (t (format t "nshell: cannot execute~%") 1)))
 

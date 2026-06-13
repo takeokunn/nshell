@@ -81,20 +81,21 @@
           for prev-pipe = (if (> i 0) (nth (1- i) pipes) nil)
           for next-pipe = (if (< i (1- n)) (nth i pipes) nil)
           do (handler-case
-                 (let ((proc (sb-ext:run-program cmd args
-                              :input (if prev-pipe
-                                         (sb-sys:make-fd-stream (first prev-pipe)
-                                                                :input t
-                                                                :buffering :line)
-                                         t)
-                              :output (if next-pipe
-                                          (sb-sys:make-fd-stream (second next-pipe)
-                                                                 :output t
+                  (let ((proc (sb-ext:run-program cmd args
+                               :input (if prev-pipe
+                                          (sb-sys:make-fd-stream (first prev-pipe)
+                                                                 :input t
                                                                  :buffering :line)
-                                          :stream)
-                              :error :output
-                              :wait nil
-                              :search t)))
+                                          t)
+                               :output (if next-pipe
+                                           (sb-sys:make-fd-stream (second next-pipe)
+                                                                  :output t
+                                                                  :buffering :line)
+                                           :stream)
+                               :error :output
+                               :wait nil
+                               :search t
+                               :environment (%get-environment))))
                    (push proc procs)
                    ;; Close our copy of prev-pipe read end (child has it)
                    (when prev-pipe
