@@ -5,14 +5,22 @@
 (defvar *saved-termios* nil)
 
 (defun enable-raw-mode ()
-  (let ((termios (sb-posix:tcgetattr 0)))
-    (setf *saved-termios* termios)
-    (let ((raw (sb-posix:tcgetattr 0)))
-      (setf (sb-posix:termios-lflag raw)
-            (logand (sb-posix:termios-lflag raw)
-                    (lognot (logior sb-posix:icanon sb-posix:echo sb-posix:isig))))
-      (sb-posix:tcsetattr 0 sb-posix:tcsadrain raw))))
+  "Enable raw terminal mode for character-by-character input."
+  (handler-case
+      (let ((termios (sb-posix:tcgetattr 0)))
+        (setf *saved-termios* termios)
+        (let ((raw (sb-posix:tcgetattr 0)))
+          (setf (sb-posix:termios-lflag raw)
+                (logand (sb-posix:termios-lflag raw)
+                        (lognot (logior sb-posix:icanon sb-posix:echo))))
+          (setf (sb-posix:termios-cc raw sb-posix:vmin) 1)
+          (setf (sb-posix:termios-cc raw sb-posix:vtime) 0)
+          (sb-posix:tcsetattr 0 sb-posix:tcsadrain raw)))
+    (error ())))
 
 (defun restore-terminal-mode ()
+  "Restore original terminal settings."
   (when *saved-termios*
-    (sb-posix:tcsetattr 0 sb-posix:tcsadrain *saved-termios*)))
+    (handler-case
+        (sb-posix:tcsetattr 0 sb-posix:tcsadrain *saved-termios*)
+      (error ()))))

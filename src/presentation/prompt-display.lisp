@@ -4,5 +4,5 @@
   (let ((cwd (uiop:getcwd)))
     (format t "~a> " (file-namestring cwd))))
 (defun render-input-line (line offset)
-  (declare (ignore line offset))
-  nil)
+  (declare (ignore offset))
+  (format t "~a" line))
