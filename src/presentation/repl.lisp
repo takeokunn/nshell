@@ -62,7 +62,7 @@
         ;; Show autosuggestion in dim
         (let ((suggestion (compute-suggestion history text)))
           (when (and suggestion (> (length suggestion) 0))
-            (format t "~C[2m~a~C[0m" #\Esc suggestion)))
+            (format t "~C[2m~a~C[0m" #\Esc suggestion #\Esc)))
         ) ;; close outer let
       (finish-output)
       ;; Read next character

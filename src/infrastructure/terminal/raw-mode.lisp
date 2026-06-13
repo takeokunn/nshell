@@ -13,8 +13,6 @@
           (setf (sb-posix:termios-lflag raw)
                 (logand (sb-posix:termios-lflag raw)
                         (lognot (logior sb-posix:icanon sb-posix:echo))))
-          (setf (sb-posix:termios-cc raw sb-posix:vmin) 1)
-          (setf (sb-posix:termios-cc raw sb-posix:vtime) 0)
           (sb-posix:tcsetattr 0 sb-posix:tcsadrain raw)))
     (error ())))
 
