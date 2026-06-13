@@ -90,7 +90,7 @@
 (defpackage #:nshell.infrastructure.acl
   (:use #:cl)
   (:export #:spawn-command #:spawn-pipeline #:wait-job
-           #:kill-process #:os-signal->domain #:domain-signal->os
+           #:kill-process #:os-signal->domain #:redirect-output #:redirect-input #:restore-redirects #:domain-signal->os
            #:install-signal-handlers
            #:open-pty #:with-pty #:pty-read #:pty-write #:run-external #:spawn-pipeline))
 

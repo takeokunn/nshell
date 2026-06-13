@@ -63,3 +63,30 @@
 (defun wait-job (process)
   (sb-ext:process-wait process)
   (sb-ext:process-exit-code process))
+
+(defvar *redirected-stdout* nil)
+(defvar *redirected-stdin* nil)
+
+(defun redirect-output (filename mode)
+  "Redirect stdout to FILENAME. MODE is :supersede or :append."
+  (let ((stream (open filename :direction :output :if-exists mode
+                      :if-does-not-exist :create)))
+    (setf *redirected-stdout* *standard-output*)
+    (setf *standard-output* stream)))
+
+(defun redirect-input (filename)
+  "Redirect stdin from FILENAME."
+  (let ((stream (open filename :direction :input :if-does-not-exist :error)))
+    (setf *redirected-stdin* *standard-input*)
+    (setf *standard-input* stream)))
+
+(defun restore-redirects ()
+  "Restore stdout/stdin after redirect."
+  (when *redirected-stdout*
+    (close *standard-output*)
+    (setf *standard-output* *redirected-stdout*)
+    (setf *redirected-stdout* nil))
+  (when *redirected-stdin*
+    (close *standard-input*)
+    (setf *standard-input* *redirected-stdin*)
+    (setf *redirected-stdin* nil)))
