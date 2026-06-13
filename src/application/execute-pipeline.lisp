@@ -1,0 +1,13 @@
+(in-package #:nshell.application)
+(defun execute-command-line (input dispatcher history config)
+  (declare (ignore config))
+  (let ((result (nshell.domain.parsing:parse-command-line input)))
+    (if (nshell.domain.parsing:parse-complete-p result)
+        (let ((ast (nshell.domain.parsing:parse-result-ast result)))
+          (nshell.domain.history:history-add history input)
+          (nshell.domain.events:make-command-parsed-event ast))
+        (nshell.domain.events:make-parse-failed-event
+         input (format nil "~a" (nshell.domain.parsing:parse-errors result))))))
+(defun execute-pipeline-use-case (pipeline dispatcher)
+  (declare (ignore pipeline dispatcher))
+  nil)

@@ -26,4 +26,3 @@ ARGS is a list of argument strings."
   "Convert command to a flat list of strings (name + args)."
   (cons (command-name-str cmd) (command-args-list cmd)))
 
-(export '(command-to-list))

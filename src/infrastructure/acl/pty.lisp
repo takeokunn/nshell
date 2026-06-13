@@ -1,0 +1,5 @@
+(in-package #:nshell.infrastructure.acl)
+(defun open-pty ()
+  (error "PTY not yet implemented - use basic pipe I/O for now"))
+(defun pty-read (pty) (declare (ignore pty)) "")
+(defun pty-write (pty data) (declare (ignore pty data)) nil)

@@ -1,0 +1,8 @@
+(in-package #:nshell.presentation)
+(defun render-prompt (config last-exit)
+  (declare (ignore config last-exit))
+  (let ((cwd (uiop:getcwd)))
+    (format t "~a> " (file-namestring cwd))))
+(defun render-input-line (line offset)
+  (declare (ignore line offset))
+  nil)

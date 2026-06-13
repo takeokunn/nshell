@@ -1,13 +1,12 @@
-;;; nshell main entry point
-;;; Wave 0: minimal binary that prints banner and exits
-
 (in-package #:nshell)
 
 (defun main ()
-  "Entry point for the nshell binary.
-Prints version banner and exits cleanly.
-Interactive REPL will be added in Wave 7."
+  "Entry point for the nshell binary."
   (format t "nshell v0.1.0 - fish-inspired interactive shell in Common Lisp~%")
   (format t "Built with SBCL ~a~%" (lisp-implementation-version))
-  (format t "Startup OK. Interactive REPL not yet implemented.~%")
+  (handler-case
+      (nshell.presentation:run-repl)
+    (error (e)
+      (format *error-output* "Fatal error: ~a~%" e)
+      (sb-ext:exit :code 1)))
   (sb-ext:exit :code 0))

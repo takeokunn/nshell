@@ -59,9 +59,4 @@ Returns the same struct if state is unchanged."
   "True if job is in :completed state."
   (eq (job-state-kw job) :completed))
 
-(export '(job-pgid
-          job-exit-code
-          job-state-transition
-          job-running-p
-          job-stopped-p
-          job-completed-p))
+;; All symbols exported via src/package.lisp

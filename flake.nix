@@ -24,8 +24,11 @@
             lispLibs = [];
             buildScript = pkgs.writeText "build-nshell.lisp" ''
               (require :asdf)
+              (setf asdf:*compile-file-warnings-behaviour* :ignore)
+              (setf asdf:*compile-file-failure-behaviour* :warn)
               (push (truename "./") asdf:*central-registry*)
-              (asdf:load-system :nshell)
+              (handler-bind ((warning (lambda (c) (muffle-warning c))))
+                (asdf:load-system :nshell))
               (sb-ext:save-lisp-and-die "nshell"
                 :executable t
                 :compression t

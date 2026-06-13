@@ -28,6 +28,3 @@ COMMANDS is a list of command structs in execution order."
   "Number of commands in the pipeline."
   (length (pipeline-commands-list pipe)))
 
-(export '(pipeline-single-command-p
-          pipeline-empty-p
-          pipeline-length))

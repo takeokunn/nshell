@@ -1,0 +1,11 @@
+(in-package #:nshell.presentation)
+(defun render-completions (candidates)
+  (when candidates
+    (format t "~%~{~a  ~}" (mapcar #'nshell.domain.completion:candidate-text candidates))
+    (format t "~%")))
+(defun cycle-completion (candidates current)
+  (declare (ignore candidates current))
+  0)
+(defun apply-completion (input candidate)
+  (declare (ignore input candidate))
+  "")
