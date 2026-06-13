@@ -42,7 +42,7 @@
          (goal1 (lambda (b) (nshell.domain.parsing:unify x 'command b)))
          (goal2 (lambda (b) (nshell.domain.parsing:unify y 'ls b)))
          (result (nshell.domain.parsing:backtrack (list goal1 goal2))))
-    (is result)
+    (is (not (null result)))
     (is (eq 'command (nshell.domain.parsing:walk x result)))
     (is (eq 'ls (nshell.domain.parsing:walk y result)))))
 

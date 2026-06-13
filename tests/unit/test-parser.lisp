@@ -29,13 +29,53 @@
   (let ((result (nshell.domain.parsing:parse-command-line "echo 'hello")))
     (is (nshell.domain.parsing:parse-result-incomplete result))))
 
-;; PBT: Tokenizer round-trip property
-(test tokenizer-roundtrip-property
-  "Generated simple commands tokenize and parse without error"
-  (let ((inputs '("ls" "pwd" "echo hello" "git status" "ls -la" "cat file.txt")))
-    (dolist (input inputs)
-      (multiple-value-bind (tokens cursor incomplete)
-          (nshell.domain.parsing:tokenize input)
-        (declare (ignore cursor))
-        (is (not incomplete))
-        (is (consp tokens))))))
+;; ── PBT: Tokenizer round-trip property ──
+;; Uses a simple seeded LCG for deterministic random generation
+(defvar *pbt-seed* 42)
+
+(defun pbt-rand (seed)
+  (let ((next (mod (+ (* 1103515245 seed) 12345) (expt 2 31))))
+    (values next (mod next 256))))
+
+(defun pbt-random-char (seed)
+  (multiple-value-bind (s r) (pbt-rand seed)
+    (let ((c (code-char (+ 97 (mod r 26)))))
+      (values s c))))
+
+(defun pbt-random-word (seed len)
+  (let ((chars '()))
+    (dotimes (i len)
+      (multiple-value-bind (s c) (pbt-random-char seed)
+        (push c chars)
+        (setf seed s)))
+    (values seed (coerce (nreverse chars) 'string))))
+
+(defun pbt-generate-command (seed)
+  "Generate a random command string."
+  (multiple-value-bind (s1 word1) (pbt-random-word seed (1+ (mod seed 8)))
+    (multiple-value-bind (s2 word2) (pbt-random-word s1 (1+ (mod s1 5)))
+      (values s2 (format nil "~a ~a" word1 word2)))))
+
+(test pbt-tokenizer-roundtrip
+  "Generated commands tokenize and parse without error (property test)"
+  (let ((seed *pbt-seed*))
+    (dotimes (i 20)
+      (multiple-value-bind (s cmd) (pbt-generate-command seed)
+        (setf seed s)
+        (multiple-value-bind (tokens cursor incomplete)
+            (nshell.domain.parsing:tokenize cmd)
+          (declare (ignore cursor))
+          (is (not incomplete) "Generated command ~s should not be incomplete" cmd)
+          (is (consp tokens) "Generated command ~s should produce tokens" cmd))))))
+
+(test pbt-parse-roundtrip
+  "Generated commands parse without error (property test)"
+  (let ((seed *pbt-seed*))
+    (dotimes (i 20)
+      (multiple-value-bind (s cmd) (pbt-generate-command seed)
+        (setf seed s)
+        (let ((result (nshell.domain.parsing:parse-command-line cmd)))
+          (is (nshell.domain.parsing:parse-complete-p result)
+              "Generated command ~s should parse completely" cmd)
+          (is (not (null (nshell.domain.parsing:parse-result-ast result)))
+              "Generated command ~s should produce AST" cmd))))))

@@ -111,7 +111,7 @@
 ;; ── Presentation packages ──────────────────────────────────
 (defpackage #:nshell.presentation
   (:use #:cl)
-  (:export #:run-repl #:render-prompt #:render-input-line
+  (:export #:run-repl #:trampoline #:done #:render-prompt #:render-input-line
            #:compute-suggestion #:accept-suggestion
            #:render-completions #:cycle-completion #:apply-completion
            #:highlight-line #:highlight-span #:highlight-role
