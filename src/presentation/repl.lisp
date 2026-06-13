@@ -53,18 +53,20 @@ redirects is a list of (op . target) pairs where op is :> :>> or :<."
         (t nil)))))
 
 (defun execute-ast (ast)
-  (cond
-    ((nshell.domain.parsing:pipeline-node-p ast)
-     (nshell.infrastructure.acl:spawn-pipeline
-      (nshell.domain.parsing:pipeline-node-commands ast)))
-    ((nshell.domain.parsing:command-node-p ast)
-     (or (execute-builtin ast)
-         (let* ((cmd (nshell.domain.parsing:command-node-command ast))
-                (args (nshell.domain.parsing:command-node-args ast)))
-           (multiple-value-bind (clean-args redirects) (extract-redirects args)
-             (apply-redirects redirects)
-             (nshell.infrastructure.acl:run-external cmd clean-args)))))
-    (t (format t "nshell: cannot execute~%"))))
+  (unwind-protect
+       (cond
+         ((nshell.domain.parsing:pipeline-node-p ast)
+          (nshell.infrastructure.acl:spawn-pipeline
+           (nshell.domain.parsing:pipeline-node-commands ast)))
+         ((nshell.domain.parsing:command-node-p ast)
+          (or (execute-builtin ast)
+              (let* ((cmd (nshell.domain.parsing:command-node-command ast))
+                     (args (nshell.domain.parsing:command-node-args ast)))
+                (multiple-value-bind (clean-args redirects) (extract-redirects args)
+                  (apply-redirects redirects)
+                  (nshell.infrastructure.acl:run-external cmd clean-args)))))
+         (t (format t "nshell: cannot execute~%")))
+    (nshell.infrastructure.acl:restore-redirects)))
 
 (defun apply-redirects (redirects)
   "Apply shell redirects to standard streams."
@@ -117,7 +119,9 @@ redirects is a list of (op . target) pairs where op is :> :>> or :<."
                        (nshell.domain.history:history-add history text)
                        ;; Persist to file history
                        (nshell.infrastructure.persistence:append-history-entry text)
-                       (execute-ast (nshell.domain.parsing:parse-result-ast result))))
+                        (execute-ast (nshell.domain.parsing:parse-result-ast result))
+                        ;; Restore redirects after execution
+                        (nshell.infrastructure.acl:restore-redirects))))
                  (error (err)
                    (format t "nshell error: ~a~%" err)))))
            (return))
