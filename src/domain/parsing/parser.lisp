@@ -1,0 +1,47 @@
+(in-package #:nshell.domain.parsing)
+
+(defstruct (parse-result (:constructor make-parse-result (ast &optional errors incomplete)))
+  (ast nil :type (or null ast-node))
+  (errors nil :type list)
+  (incomplete nil :type boolean))
+
+(defun parse-complete-p (result)
+  (and (parse-result-ast result)
+       (null (parse-result-errors result))
+       (not (parse-result-incomplete result))))
+
+(defun parse-errors (result)
+  (parse-result-errors-list result))
+
+(defun parse-command-line (input &key (cursor-pos nil))
+  (multiple-value-bind (tokens cursor-token incomplete)
+      (tokenize input :cursor-pos cursor-pos)
+    (declare (ignore cursor-token))
+    (if (null tokens)
+        (make-parse-result nil nil incomplete)
+        (parse-tokens tokens incomplete))))
+
+(defun parse-tokens (tokens incomplete)
+  (let ((commands '())
+        (current-args '())
+        (current-cmd nil)
+        (errors '()))
+    (labels ((flush-command ()
+               (when current-cmd
+                 (push (make-command-node current-cmd (nreverse current-args)) commands)
+                 (setf current-cmd nil current-args nil))))
+      (dolist (tok tokens)
+        (case (token-type tok)
+          (:word
+           (if current-cmd
+               (push (token-value tok) current-args)
+               (setf current-cmd (token-value tok))))
+          (:pipe (flush-command))
+          (:redirect (push (token-value tok) current-args))
+          (:error (push (format nil "Parse error near: ~a" (token-value tok)) errors))
+          (t (push (format nil "Unexpected token: ~a" (token-value tok)) errors))))
+      (flush-command))
+    (let ((ast (if (= (length commands) 1)
+                   (first commands)
+                   (make-pipeline-node (nreverse commands)))))
+      (make-parse-result ast errors incomplete))))
