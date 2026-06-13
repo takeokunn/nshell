@@ -29,7 +29,6 @@
                        while (and (char/= ch #\Space) (char/= ch #\Tab)
                                   (char/= ch #\|) (char/= ch #\>)
                                   (char/= ch #\<) (char/= ch #\#)
-                                  (char/= ch #\;) (char/= ch #\&)
                                   (char/= ch #\') (char/= ch #\")
                                   (char/= ch #\\))
                        do (push ch chars) (advance))

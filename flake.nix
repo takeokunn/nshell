@@ -30,7 +30,7 @@
               (asdf:load-system :nshell)
               (sb-ext:save-lisp-and-die "nshell"
                 :executable t
-                :compression nil
+                :compression t
                 :toplevel #'nshell:main)
             '';
             installPhase = ''
