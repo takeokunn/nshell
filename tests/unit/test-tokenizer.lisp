@@ -49,3 +49,19 @@
       (nshell.domain.parsing:tokenize "")
     (declare (ignore cursor incomplete))
     (is (null tokens))))
+
+(test pbt-tokenizer-spans-are-monotonic-and-in-bounds
+  "Token spans are monotonic and remain within the generated input bounds."
+  (for-all-property (:trials 50) ((input (gen-shell-pipeline)))
+    (multiple-value-bind (tokens cursor incomplete)
+        (nshell.domain.parsing:tokenize input)
+      (declare (ignore cursor incomplete))
+      (is (loop with previous-end = 0
+                for token in tokens
+                for start = (nshell.domain.parsing:token-start token)
+                for end = (nshell.domain.parsing:token-end token)
+                always (and (<= 0 start end (length input))
+                            (<= previous-end start))
+                do (setf previous-end end))
+          "Tokenizer produced non-monotonic or out-of-bounds spans for ~s"
+          input))))

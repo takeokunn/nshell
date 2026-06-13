@@ -8,12 +8,18 @@
 
 (test file-history-append
   "Appending to file history works"
-  (let ((path (nshell.infrastructure.persistence:history-file-path)))
-    ;; Clean up any previous test data
-    (when (probe-file path) (delete-file path))
-    (nshell.infrastructure.persistence:append-history-entry "test command")
-    (let ((loaded (nshell.infrastructure.persistence:load-history-file)))
-      (is (consp loaded))
-      (is (string= "test command" (first loaded))))
-    ;; Cleanup
-    (delete-file path)))
+  (let* ((test-path (format nil "/tmp/nshell-test-history-~d.lisp" (random 1000000))))
+    (unwind-protect
+         (progn
+           ;; Override history file path for test isolation
+           (setf nshell.infrastructure.persistence:*history-file-path-override*
+                 (pathname test-path))
+           ;; Clean up any previous test data
+           (when (probe-file test-path) (delete-file test-path))
+           (nshell.infrastructure.persistence:append-history-entry "test command")
+           (let ((loaded (nshell.infrastructure.persistence:load-history-file)))
+             (is (consp loaded))
+             (is (string= "test command" (first loaded)))))
+      ;; Cleanup
+      (setf nshell.infrastructure.persistence:*history-file-path-override* nil)
+      (when (probe-file test-path) (delete-file test-path)))))

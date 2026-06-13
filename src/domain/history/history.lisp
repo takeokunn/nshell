@@ -16,7 +16,40 @@
   "An append-only command history with search capabilities.
 MAX-ENTRIES is the maximum number of entries to keep."
   (entries nil :type list)
-  (max-entries 10000 :type integer :read-only t))
+  (max-entries 10000 :type integer :read-only t)
+  (navigate-index -1 :type integer))
+  ;; navigate-index: -1 means not navigating; 0+ means currently at that index
+
+(defun history-previous (history current-prefix)
+  "Navigate to the previous (older) history entry matching CURRENT-PREFIX.
+   Returns the entry text or NIL if at the end."
+  (let* ((entries (command-history-entries history))
+         (idx (command-history-navigate-index history))
+         (start (if (< idx 0) 0 (1+ idx))))
+    (loop for i from start below (length entries)
+          for entry = (nth i entries)
+          for text = (entry-text entry)
+          when (or (string= current-prefix "")
+                   (and (>= (length text) (length current-prefix))
+                        (string-equal current-prefix text :end2 (length current-prefix))))
+            do (setf (command-history-navigate-index history) i)
+               (return text)
+          finally (return nil))))
+
+(defun history-next (history)
+  "Navigate to the next (newer) history entry. Returns the entry text or NIL."
+  (let ((idx (command-history-navigate-index history)))
+    (if (> idx 0)
+        (let ((entry (nth (1- idx) (command-history-entries history))))
+          (setf (command-history-navigate-index history) (1- idx))
+          (entry-text entry))
+        (progn
+          (setf (command-history-navigate-index history) -1)
+          nil))))
+
+(defun history-reset-navigation (history)
+  "Reset history navigation index (called after command execution)."
+  (setf (command-history-navigate-index history) -1))
 
 (defun make-history (&key (max-entries 10000))
   "Create an in-memory command history.

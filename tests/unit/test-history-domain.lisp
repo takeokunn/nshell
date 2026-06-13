@@ -76,4 +76,47 @@
     (nshell.domain.history:history-add h "cmd4")
     (is (= 3 (nshell.domain.history:history-size h)))
     (is (string= "cmd4" (nshell.domain.history:entry-text
-                         (first (nshell.domain.history:history-all h)))))))
+                          (first (nshell.domain.history:history-all h)))))))
+
+(test pbt-history-exact-search-after-add-returns-entry
+  "Exact search finds generated entries after they are added."
+  (for-all-property (:trials 50) ((command (gen-shell-command)))
+    (let ((history (nshell.domain.history:make-command-history :max-entries 100)))
+      (nshell.domain.history:history-add history command)
+      (let ((results (nshell.domain.history:history-search history command :mode :exact)))
+        (is (some (lambda (entry)
+                    (string= command (nshell.domain.history:entry-text entry)))
+                  results)
+            "Exact search should return generated command ~s" command)))))
+
+(test pbt-history-prefix-results-match-prefix
+  "Every prefix search result starts with the generated query prefix."
+  (for-all-property (:trials 50)
+      ((command (gen-shell-command))
+       (prefix-length (gen-in-range 0 12)))
+    (let* ((history (nshell.domain.history:make-command-history :max-entries 100))
+           (query (subseq command 0 (min prefix-length (length command)))))
+      (nshell.domain.history:history-add history command)
+      (nshell.domain.history:history-add history (concatenate 'string command "-suffix"))
+      (let ((results (nshell.domain.history:history-search history query :mode :prefix)))
+        (is (every (lambda (entry)
+                     (nshell.domain.history::history-match-prefix entry query))
+                   results)
+            "Prefix search for ~s returned a non-matching entry" query)))))
+
+(test pbt-history-dedup-after-duplicate-add-is-idempotent
+  "Adding duplicates then deduplicating repeatedly preserves the same history."
+  (for-all-property (:trials 50) ((command (gen-shell-command)))
+    (let ((history (nshell.domain.history:make-command-history :max-entries 100)))
+      (nshell.domain.history:history-add history command)
+      (nshell.domain.history:history-add history command)
+      (nshell.domain.history:history-dedup history)
+      (let ((once (mapcar #'nshell.domain.history:entry-text
+                          (nshell.domain.history:history-all history))))
+        (nshell.domain.history:history-dedup history)
+        (let ((twice (mapcar #'nshell.domain.history:entry-text
+                             (nshell.domain.history:history-all history))))
+          (is (equal once twice)
+              "Repeated dedup should preserve generated history for ~s" command)
+          (is (= 1 (nshell.domain.history:history-size history))
+              "Duplicate generated command ~s should appear once after dedup" command))))))

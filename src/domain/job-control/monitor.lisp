@@ -14,6 +14,8 @@
   (let ((job (gethash job-id (job-monitor-jobs monitor))))
     (when job
       (nshell.domain.execution:job-state-transition job state)
+      (when exit-code
+        (setf (nshell.domain.execution:job-exit-code job) exit-code))
       job)))
 
 (defun monitor-jobs (monitor)
@@ -21,6 +23,9 @@
 
 (defun monitor-find-job (monitor job-id)
   (gethash job-id (job-monitor-jobs monitor)))
+
+(defun monitor-remove-job (monitor job-id)
+  (remhash job-id (job-monitor-jobs monitor)))
 
 (defun suspend-job (monitor job-id kont)
   (declare (ignore kont))

@@ -14,6 +14,13 @@
                           (:constructor make-pipeline-node (commands &optional span)))
   (commands nil :type list :read-only t))
 
+(defstruct (sequence-node (:include ast-node)
+                          (:constructor make-sequence-node (commands &optional separators span)))
+  "Represents ;-separated sequential commands or &-separated background commands.
+   SEPARATORS is a list of :semi or :amp keywords, one per command except the last."
+  (commands nil :type list :read-only t)
+  (separators nil :type list :read-only t))
+
 (defstruct (argument-node (:include ast-node)
                           (:constructor make-argument-node (value &optional span)))
   (value "" :type string :read-only t))
@@ -38,7 +45,20 @@
 
 (defun ast-has-errors-p (node)
   (labels ((check (n)
-             (cond ((error-node-p n) t)
-                   ((pipeline-node-p n) (some #'check (pipeline-node-commands n)))
-                   (t nil))))
+              (cond ((error-node-p n) t)
+                    ((pipeline-node-p n) (some #'check (pipeline-node-commands n)))
+                    (t nil))))
     (check node)))
+
+;; -- Arg utilities (cons-based arg support) -----------------
+(defun arg-value (arg)
+  "Extract string value from an arg (string or (value . quoted-p) cons)."
+  (if (consp arg) (car arg) arg))
+
+(defun arg-quoted-p (arg)
+  "Return T if arg was single-quoted and should not be expanded."
+  (and (consp arg) (cdr arg)))
+
+(defun command-node-arg-values (node)
+  "Return all args as plain strings (unwrapping cons cells)."
+  (mapcar #'arg-value (command-node-args node)))

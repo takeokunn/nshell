@@ -6,5 +6,6 @@
          (cmd (nshell.domain.execution:make-command "sleep" '("1")))
          (pipe (nshell.domain.execution:make-pipeline cmd))
          (job (nshell.domain.execution:make-job 1 pipe)))
+    (declare (ignore monitor job))
     (is (nshell.domain.execution:job-state-valid-p :running))
     (is (nshell.domain.execution:job-state-valid-p :stopped))))

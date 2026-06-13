@@ -74,8 +74,17 @@
     (dotimes (i 20)
       (multiple-value-bind (s cmd) (pbt-generate-command seed)
         (setf seed s)
-        (let ((result (nshell.domain.parsing:parse-command-line cmd)))
-          (is (nshell.domain.parsing:parse-complete-p result)
-              "Generated command ~s should parse completely" cmd)
-          (is (not (null (nshell.domain.parsing:parse-result-ast result)))
-              "Generated command ~s should produce AST" cmd))))))
+         (let ((result (nshell.domain.parsing:parse-command-line cmd)))
+           (is (nshell.domain.parsing:parse-complete-p result)
+               "Generated command ~s should parse completely" cmd)
+           (is (not (null (nshell.domain.parsing:parse-result-ast result)))
+               "Generated command ~s should produce AST" cmd))))))
+
+(test pbt-parser-generated-pipelines-parse-completely
+  "Generated shell pipelines parse completely and produce an AST."
+  (for-all-property (:trials 50) ((pipeline (gen-shell-pipeline)))
+    (let ((result (nshell.domain.parsing:parse-command-line pipeline)))
+      (is (nshell.domain.parsing:parse-complete-p result)
+          "Generated pipeline ~s should parse completely" pipeline)
+      (is (not (null (nshell.domain.parsing:parse-result-ast result)))
+          "Generated pipeline ~s should produce an AST" pipeline))))

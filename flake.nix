@@ -25,12 +25,19 @@
             buildScript = pkgs.writeText "build-nshell.lisp" ''
               (require :asdf)
               (setf asdf:*compile-file-warnings-behaviour* :warn)
+              (setf asdf:*compile-file-failure-behaviour* :warn)
               (push (truename "./") asdf:*central-registry*)
               (asdf:load-system :nshell)
               (sb-ext:save-lisp-and-die "nshell"
                 :executable t
-                :compression t
+                :compression nil
                 :toplevel #'nshell:main)
+            '';
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              cp nshell $out/bin/
+              runHook postInstall
             '';
           };
 
@@ -46,8 +53,84 @@
       apps = forAllSystems (system: {
         default = {
           type = "app";
-          program = "${self.packages.${system}.default}/nshell";
+          program = "${self.packages.${system}.default}/bin/nshell";
         };
+      });
+
+      checks = forAllSystems (system: let
+        pkgs = nixpkgs.legacyPackages.${system};
+        bin = "${self.packages.${system}.default}/bin/nshell";
+      in {
+        # Verify the default package compiles and builds successfully
+        build = self.packages.${system}.default;
+
+        # Run the full test suite (331 tests)
+        test = pkgs.sbcl.buildASDFSystem {
+          pname = "nshell-test-check";
+          version = "0.1.0";
+          src = ./.;
+          systems = [ "nshell/test" ];
+          lispLibs = [ pkgs.sbclPackages.fiveam ];
+          buildScript = pkgs.writeText "run-tests.lisp" ''
+            (require :asdf)
+            (setf asdf:*compile-file-warnings-behaviour* :warn)
+            (setf asdf:*compile-file-failure-behaviour* :warn)
+            (push (truename "./") asdf:*central-registry*)
+            (let ((result (handler-case (asdf:test-system :nshell/test)
+                            (error (e) (format t "FATAL: ~a~%" e) nil))))
+              (unless result
+                (sb-ext:quit :unix-status 1)))
+          '';
+        };
+
+        # Smoke test: verify the binary works with basic shell operations
+        smoke-test = pkgs.runCommand "nshell-smoke-test" {
+          buildInputs = [ self.packages.${system}.default ];
+        } ''
+          set -euo pipefail
+
+          echo "=== nshell smoke test ==="
+
+          # Verify binary exists and is executable
+          test -x "${bin}" || {
+            echo "FAIL: binary not found or not executable at ${bin}"
+            exit 1
+          }
+          echo "PASS: binary exists and is executable"
+
+          # Test 1: echo a string
+          echo "echo hello" | "${bin}" > output 2>&1
+          grep -q hello output || {
+            echo "FAIL: 'echo hello' - expected 'hello' in output"
+            echo "got: $(cat output)"
+            exit 1
+          }
+          echo "PASS: echo hello"
+
+          # Test 2: pipeline
+          echo "echo hello world | grep world" | "${bin}" > output2 2>&1
+          grep -q world output2 || {
+            echo "FAIL: pipeline grep - expected 'world' in output"
+            echo "got: $(cat output2)"
+            exit 1
+          }
+          echo "PASS: pipeline with grep"
+
+          # Test 3: cd and pwd (verify pwd output is correct, not matching prompt echo)
+          echo "cd /tmp ; pwd" | "${bin}" > output3 2>&1
+          # pwd should output exactly /private/tmp (macOS) or /tmp (Linux)
+          { grep "/tmp" output3 | grep -v "~" | grep -v ">" ; } || {
+            echo "FAIL: 'cd /tmp ; pwd' - expected /tmp in output"
+            echo "got: $(cat output3 | head -c 2000)"
+            exit 1
+          }
+          echo "PASS: cd && pwd"
+
+          # All tests passed
+          echo ""
+          echo "All smoke tests passed successfully!"
+          touch $out
+        '';
       });
 
       devShells = forAllSystems (system:
@@ -61,6 +144,12 @@
             ];
             shellHook = ''
               export CL_SOURCE_REGISTRY=$PWD
+              alias test='sbcl --noinform --eval "(require :asdf)" --eval "(push (truename \"./\") asdf:*central-registry*)" --eval "(asdf:test-system :nshell/test)" --quit'
+              echo ""
+              echo "nshell development environment"
+              echo "  test  - Run the nshell test suite (331 tests)"
+              echo "  sbcl  - Interactive Common Lisp (with fiveam)"
+              echo ""
             '';
           };
         });

@@ -1,0 +1,163 @@
+;;; Shell expansion engine
+(in-package #:nshell.domain.expansion)
+
+(defun variable-name-char-p (ch)
+  (or (alphanumericp ch) (char= ch #\_)))
+
+(defun expand-variables (input env)
+  "Expand $VAR and ${VAR} occurrences in INPUT using ENV.
+Undefined variables expand to the empty string."
+  (with-output-to-string (out)
+    (loop with len = (length input)
+          for i from 0 below len
+          for ch = (char input i)
+          do (cond
+               ((char/= ch #\$) (write-char ch out))
+               ((>= (1+ i) len) (write-char ch out))
+               ((char= (char input (1+ i)) #\{)
+                (let ((end (position #\} input :start (+ i 2))))
+                  (if end
+                      (let* ((name (subseq input (+ i 2) end))
+                             (value (nshell.domain.environment:env-get env name)))
+                        (write-string (or value "") out)
+                        (setf i end))
+                      (write-char ch out))))
+               ((variable-name-char-p (char input (1+ i)))
+                (let ((start (1+ i))
+                      (end (loop for j from (1+ i) below len
+                                 while (variable-name-char-p (char input j))
+                                 finally (return j))))
+                  (write-string (or (nshell.domain.environment:env-get env (subseq input start end)) "") out)
+                  (setf i (1- end))))
+               (t (write-char ch out))))))
+
+(defun starts-with-p (prefix string)
+  (and (<= (length prefix) (length string))
+       (string= prefix string :end2 (length prefix))))
+
+(defun expand-tilde (input env)
+  "Expand leading ~ to HOME and ~USER to /home/USER."
+  (cond
+    ((string= input "~") (or (nshell.domain.environment:env-get env "HOME") "~"))
+    ((starts-with-p "~/" input)
+     (concatenate 'string (or (nshell.domain.environment:env-get env "HOME") "~")
+                  (subseq input 1)))
+    ((and (> (length input) 1) (char= (char input 0) #\~))
+     (let ((slash (position #\/ input)))
+       (if slash
+           (concatenate 'string "/home/" (subseq input 1 slash) (subseq input slash))
+           (concatenate 'string "/home/" (subseq input 1)))))
+    (t input)))
+
+(defun glob-char-p (ch)
+  (member ch '(#\* #\? #\[) :test #'char=))
+
+(defun glob-pattern-p (pattern)
+  (some #'glob-char-p pattern))
+
+(defun pathname-directory-string (path)
+  (let ((dir (pathname-directory (pathname path))))
+    (cond
+      ((and dir (member :absolute dir))
+       (format nil "/~{~a/~}" (remove :absolute dir)))
+      ((and dir (member :relative dir))
+       (format nil "~{~a/~}" (remove :relative dir)))
+      (t ""))))
+
+(defun glob-root (pattern)
+  (let ((wild (position-if #'glob-char-p pattern)))
+    (if wild
+        (let* ((prefix (subseq pattern 0 wild))
+               (slash (position #\/ prefix :from-end t)))
+          (if slash
+              (subseq prefix 0 (1+ slash))
+              "./"))
+        (pathname-directory-string pattern))))
+
+;; Dynamic variable for filesystem operations (DDD: domain should not call uiop directly)
+(defvar *glob-directory-files-fn* nil
+  "Function to list files in a directory. Set to (lambda (dir) (uiop:directory-files dir)) by infrastructure.
+   If NIL, glob expansion always returns the pattern unchanged.")
+
+(defvar *glob-subdirectories-fn* nil
+  "Function to list subdirectories. Set by infrastructure layer.")
+
+(defun recursive-directory-files (root)
+  (unless *glob-directory-files-fn* (return-from recursive-directory-files nil))
+  (let ((files nil))
+    (labels ((walk (dir)
+               (dolist (file (funcall *glob-directory-files-fn* dir))
+                 (push file files))
+               (dolist (subdir (funcall *glob-subdirectories-fn* dir))
+                 (walk subdir))))
+      (handler-case (walk (pathname root))
+        (error () nil)))
+    files))
+
+(defun immediate-directory-files (root)
+  (unless *glob-directory-files-fn* (return-from immediate-directory-files nil))
+  (handler-case (funcall *glob-directory-files-fn* (pathname root))
+    (error () nil)))
+
+(defun bracket-match-p (pattern-index pattern ch)
+  (let ((end (position #\] pattern :start (1+ pattern-index))))
+    (when end
+      (values (find ch pattern :start (1+ pattern-index) :end end :test #'char=)
+              (1+ end)))))
+
+(defun glob-match-p (pattern text)
+  "Return true when TEXT matches shell-style PATTERN."
+  (labels ((match (pidx tidx)
+             (cond
+               ((= pidx (length pattern)) (= tidx (length text)))
+               ((and (< (1+ pidx) (length pattern))
+                     (char= (char pattern pidx) #\*)
+                     (char= (char pattern (1+ pidx)) #\*))
+                (or (match (+ pidx 2) tidx)
+                    (and (< tidx (length text)) (match pidx (1+ tidx)))))
+               ((char= (char pattern pidx) #\*)
+                (or (match (1+ pidx) tidx)
+                    (and (< tidx (length text))
+                         (char/= (char text tidx) #\/)
+                         (match pidx (1+ tidx)))))
+               ((char= (char pattern pidx) #\?)
+                (and (< tidx (length text))
+                     (char/= (char text tidx) #\/)
+                     (match (1+ pidx) (1+ tidx))))
+               ((char= (char pattern pidx) #\[)
+                (multiple-value-bind (ok next-pidx) (and (< tidx (length text))
+                                                         (bracket-match-p pidx pattern (char text tidx)))
+                  (and ok (match next-pidx (1+ tidx)))))
+               (t (and (< tidx (length text))
+                       (char= (char pattern pidx) (char text tidx))
+                       (match (1+ pidx) (1+ tidx)))))))
+    (match 0 0)))
+
+(defun enough-path (file root)
+  (namestring (enough-namestring file (pathname root))))
+
+(defun expand-glob (pattern)
+  "Expand PATTERN containing *, ?, [abc], or ** into matching path strings.
+Returns a one-element list containing PATTERN when it has no glob syntax or no matches."
+  (if (not (glob-pattern-p pattern))
+      (list pattern)
+      (let* ((root (glob-root pattern))
+             (recursive-p (search "**" pattern))
+             (files (if recursive-p
+                        (recursive-directory-files root)
+                        (immediate-directory-files root)))
+             (matches (remove-if-not
+                       (lambda (file)
+                         (let* ((relative (enough-path file root))
+                                (candidate (if (string= root "./")
+                                               relative
+                                               (concatenate 'string root relative))))
+                           (glob-match-p pattern candidate)))
+                       files)))
+        (if matches
+            (sort (mapcar #'namestring matches) #'string<)
+            (list pattern)))))
+
+(defun expand-all (input env)
+  "Apply tilde, variable, and glob expansion to INPUT."
+  (expand-glob (expand-variables (expand-tilde input env) env)))

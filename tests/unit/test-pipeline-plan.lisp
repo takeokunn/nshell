@@ -8,3 +8,17 @@
   (let* ((cmd (nshell.domain.execution:make-command "ls"))
          (pipe (nshell.domain.execution:make-pipeline cmd)))
     (is (nshell.domain.execution:pipeline-single-command-p pipe))))
+
+(test pipeline-plan-preserves-stage-order
+  (let* ((cmd1 (nshell.domain.execution:make-command "printf" '("foo")))
+         (cmd2 (nshell.domain.execution:make-command "grep" '("f")))
+         (pipe (nshell.domain.execution:make-pipeline cmd1 cmd2))
+         (plan (nshell.domain.execution:make-pipeline-plan pipe))
+         (stages (nshell.domain.execution:pipeline-plan-stages plan)))
+    (is (= 2 (nshell.domain.execution:pipeline-stage-count plan)))
+    (is (eq cmd1 (nshell.domain.execution:pipeline-stage-command (first stages))))
+    (is (eq cmd2 (nshell.domain.execution:pipeline-stage-command (second stages))))
+    (is (eq :pipe (nshell.domain.execution:pipe-config-stdout
+                   (nshell.domain.execution:pipeline-stage-pipe-config (first stages)))))
+    (is (eq :pipe (nshell.domain.execution:pipe-config-stdin
+                   (nshell.domain.execution:pipeline-stage-pipe-config (second stages)))))))

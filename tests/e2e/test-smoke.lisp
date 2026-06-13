@@ -18,7 +18,8 @@
   "Verify pipeline execution via spawn-pipeline"
   (let* ((cmd1 (nshell.domain.parsing:make-command-node "echo" '("hello")))
          (pipe (nshell.domain.parsing:make-pipeline-node (list cmd1)))
-         (exit (nshell.infrastructure.acl:spawn-pipeline (list cmd1))))
+         (exit (nshell.infrastructure.acl:spawn-pipeline
+                (nshell.domain.parsing:pipeline-node-commands pipe))))
     (is (= 0 exit))))
 (test e2e-external-command
   "External command execution returns correct exit code"

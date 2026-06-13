@@ -2,10 +2,50 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defstruct (pipeline (:constructor %make-pipeline (commands-list))
                        (:conc-name pipeline-))
-    (commands-list nil :type list :read-only t)))
+    (commands-list nil :type list :read-only t))
+
+  (defstruct (pipe-config (:constructor make-pipe-config (&key stdin stdout index last-p))
+                          (:conc-name pipe-config-))
+    (stdin nil :type (or null keyword))
+    (stdout nil :type (or null keyword))
+    (index 0 :type integer :read-only t)
+    (last-p nil :type boolean :read-only t))
+
+  (defstruct (pipeline-stage (:constructor make-pipeline-stage (stage-command pipe-config))
+                             (:conc-name pipeline-stage-))
+    (stage-command nil :read-only t)
+    (pipe-config nil :type pipe-config :read-only t))
+
+  (defstruct (pipeline-plan (:constructor %make-pipeline-plan (stages))
+                            (:conc-name pipeline-plan-))
+    (stages nil :type list :read-only t)))
+
 (defun make-pipeline (&rest commands)
   (%make-pipeline commands))
 (defun pipeline-commands (pipe) (pipeline-commands-list pipe))
 (defun pipeline-single-command-p (pipe) (= (length (pipeline-commands-list pipe)) 1))
 (defun pipeline-empty-p (pipe) (null (pipeline-commands-list pipe)))
 (defun pipeline-length (pipe) (length (pipeline-commands-list pipe)))
+
+(defun pipeline-stage-command (stage)
+  (pipeline-stage-stage-command stage))
+
+(defun make-pipeline-plan (pipeline)
+  "Create a pure execution plan from PIPELINE."
+  (let* ((commands (pipeline-commands pipeline))
+         (last-index (1- (length commands))))
+    (%make-pipeline-plan
+     (loop for command in commands
+           for index from 0
+           for last-p = (= index last-index)
+           collect (make-pipeline-stage
+                    command
+                    (make-pipe-config
+                     :stdin (when (plusp index) :pipe)
+                     :stdout (unless last-p :pipe)
+                     :index index
+                     :last-p last-p))))))
+
+(defun pipeline-stage-count (plan)
+  "Return the number of stages in PLAN."
+  (length (pipeline-plan-stages plan)))
