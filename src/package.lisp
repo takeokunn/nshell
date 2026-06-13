@@ -31,7 +31,7 @@
   (:export #:make-command #:command-name #:command-args
            #:make-pipeline #:pipeline-commands
            #:make-job #:job-id #:job-state #:job-pipeline
-           #:job-state-valid-p #:job-state-transition #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p
+           #:job-state-valid-p #:job-state-transition #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p #:job-pgid #:job-exit-code #:job-state-kw #:make-job-monitor #:monitor-find-job
            #:job-state-kw #:job-exit-code))
 
 (defpackage #:nshell.domain.parsing
