@@ -24,17 +24,15 @@
 
             nativeBuildInputs = [ sbcl ];
 
+            ASDF_OUTPUT_TRANSLATIONS = "/:";
+
             buildPhase = ''
               export HOME=$TMPDIR
-              export CL_SOURCE_REGISTRY=$PWD
-              sbcl --non-interactive \
+              sbcl --noinform --non-interactive \
                 --eval '(require :asdf)' \
-                --eval '(push (truename "./") asdf:*central-registry*)' \
+                --eval '(asdf:initialize-source-registry (quote (:source-registry :here :inherit-configuration)))' \
                 --eval '(asdf:load-system :nshell)' \
-                --eval '(sb-ext:save-lisp-and-die "nshell"
-                          :executable t
-                          :compression t
-                          :toplevel #'"'"'nshell:main)'
+                --eval '(sb-ext:save-lisp-and-die "nshell" :executable t :compression t :toplevel (quote nshell:main))'
             '';
 
             installPhase = ''
