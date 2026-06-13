@@ -10,8 +10,16 @@
 ;; ── Domain packages (pure, no side effects) ────────────────
 (defpackage #:nshell.domain.events
   (:use #:cl)
-  (:export #:domain-event #:event-type #:event-timestamp
-           #:make-event #:event-type-p))
+  (:export #:domain-event #:domain-event-p #:domain-event-type #:domain-event-timestamp
+           #:make-domain-event #:event-type #:event-timestamp
+           #:make-event #:event-type-p
+           #:make-command-entered-event #:make-command-parsed-event
+           #:make-parse-failed-event #:make-pipeline-started-event
+           #:make-process-created-event #:make-process-exited-event
+           #:make-pipeline-completed-event #:make-job-created-event
+           #:make-job-stopped-event #:make-job-continued-event
+           #:make-job-completed-event #:make-signal-caught-event
+           #:make-command-appended-to-history-event #:make-completion-triggered-event))
 
 (defpackage #:nshell.domain.signals
   (:use #:cl)
@@ -29,11 +37,13 @@
 (defpackage #:nshell.domain.parsing
   (:use #:cl)
   (:export #:tokenize #:parse-command-line #:parse-result
-           #:token-type #:token-value #:make-token
+           #:token-type #:token-value #:token-start #:token-end #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
            #:make-argument-node #:make-operator-node #:make-error-node
+           #:command-node-p #:pipeline-node-p #:command-node-command #:command-node-args
+           #:pipeline-node-commands
            #:var-p #:make-var #:unify #:walk #:extend-bindings #:backtrack
-           #:parse-complete-p #:parse-errors))
+           #:parse-complete-p #:parse-errors #:parse-result-ast #:parse-result-incomplete))
 
 (defpackage #:nshell.domain.completion
   (:use #:cl)
