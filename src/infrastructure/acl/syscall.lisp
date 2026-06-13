@@ -4,15 +4,32 @@
 
 (defun spawn-command (command)
   (let* ((args (nshell.domain.execution:command-args command))
-         (cmd-name (nshell.domain.execution:command-name command))
-         (all-args (cons cmd-name args)))
-    (sb-ext:run-program (first all-args) (rest all-args)
-                        :output :stream :error :stream :wait nil)))
+         (cmd-name (nshell.domain.execution:command-name command)))
+    (sb-ext:run-program cmd-name args :output :stream :error :output :wait nil :search t)))
 
-(defun spawn-pipeline (pipeline)
-  (let ((cmds (nshell.domain.execution:pipeline-commands pipeline)))
-    (dolist (cmd cmds)
-      (spawn-command cmd))))
+(defun run-external (cmd args)
+  "Run an external command, print its output, return exit code."
+  (handler-case
+      (let ((proc (sb-ext:run-program cmd args
+                    :output :stream :error :output :wait t :search t)))
+        (when proc
+          (let ((out (sb-ext:process-output proc)))
+            (when out
+              (loop for line = (read-line out nil nil)
+                    while line do (write-line line))))
+          (sb-ext:process-exit-code proc)))
+    (error (err)
+      (format *error-output* "nshell: ~a: ~a~%" cmd err)
+      1)))
+
+(defun spawn-pipeline (commands)
+  "Execute commands sequentially."
+  (let ((exit 0))
+    (dolist (cmd-node commands)
+      (let ((cmd (nshell.domain.parsing:command-node-command cmd-node))
+            (args (nshell.domain.parsing:command-node-args cmd-node)))
+        (setf exit (run-external cmd args))))
+    exit))
 
 (defun wait-job (process)
   (sb-ext:process-wait process)

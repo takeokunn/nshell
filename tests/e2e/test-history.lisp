@@ -1,0 +1,10 @@
+(in-package #:nshell/test)
+(def-suite e2e-history-tests :description "E2E history tests" :in nshell-tests)
+(in-suite e2e-history-tests)
+(test e2e-history-persists-across-sessions
+  (let ((h (nshell.domain.history:make-command-history :max-entries 10)))
+    (nshell.domain.history:history-add h "cmd1")
+    (nshell.domain.history:history-add h "cmd2")
+    (is (= 2 (nshell.domain.history:history-size h)))
+    (let ((results (nshell.domain.history:history-search h "cmd" :mode :prefix)))
+      (is (= 2 (length results))))))

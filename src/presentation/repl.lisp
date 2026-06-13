@@ -39,7 +39,7 @@
      (or (execute-builtin ast history)
          (let ((cmd (nshell.domain.parsing:command-node-command ast))
                (args (nshell.domain.parsing:command-node-args ast)))
-           (nshell.application:execute-external cmd args))))
+           (nshell.infrastructure.acl:run-external cmd args))))
     (t (format t "nshell: cannot execute~%"))))
 
 ;; ── Main REPL ───────────────────────────────────────────────
@@ -65,10 +65,7 @@
                 (when (nshell.domain.parsing:parse-complete-p result)
                   (nshell.domain.history:history-add history line)
                   (let ((ast (nshell.domain.parsing:parse-result-ast result)))
-                    ;; Fish-style features invoked during execution
-                    (let ((suggestion (compute-suggestion history line)))
-                      (when suggestion
-                        (format t "~C[2m~a~C[0m" #\Esc suggestion #\Esc)))
+                    ;; Execute command
                     (execute-ast ast history))))
             (error (err)
               (format t "nshell error: ~a~%" err)))))))

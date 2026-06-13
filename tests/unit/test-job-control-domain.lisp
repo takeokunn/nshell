@@ -1,0 +1,11 @@
+(in-package #:nshell/test)
+(def-suite job-control-domain-tests :description "Job control domain tests" :in nshell-tests)
+(in-suite job-control-domain-tests)
+(test monitor-creates-jobs
+  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+         (cmd (nshell.domain.execution:make-command "ls"))
+         (pipe (nshell.domain.execution:make-pipeline cmd))
+         (job (nshell.domain.execution:make-job 1 pipe))
+         (id (nshell.domain.job-control:monitor-add-job monitor job)))
+    (is (= 0 id))
+    (is (nshell.domain.job-control:monitor-find-job monitor id))))

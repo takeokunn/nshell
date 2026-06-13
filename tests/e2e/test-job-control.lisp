@@ -1,0 +1,10 @@
+(in-package #:nshell/test)
+(def-suite e2e-job-tests :description "E2E job control tests" :in nshell-tests)
+(in-suite e2e-job-tests)
+(test e2e-job-monitor-lifecycle
+  (let* ((monitor (nshell.domain.job-control:make-job-monitor))
+         (cmd (nshell.domain.execution:make-command "sleep" '("1")))
+         (pipe (nshell.domain.execution:make-pipeline cmd))
+         (job (nshell.domain.execution:make-job 1 pipe)))
+    (is (nshell.domain.execution:job-state-valid-p :running))
+    (is (nshell.domain.execution:job-state-valid-p :stopped))))

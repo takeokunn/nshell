@@ -31,7 +31,7 @@
   (:export #:make-command #:command-name #:command-args
            #:make-pipeline #:pipeline-commands
            #:make-job #:job-id #:job-state #:job-pipeline
-           #:job-state-valid-p #:job-state-transition
+           #:job-state-valid-p #:job-state-transition #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p
            #:job-state-kw #:job-exit-code))
 
 (defpackage #:nshell.domain.parsing
@@ -92,7 +92,7 @@
   (:export #:spawn-command #:spawn-pipeline #:wait-job
            #:kill-process #:os-signal->domain #:domain-signal->os
            #:install-signal-handlers
-           #:open-pty #:with-pty #:pty-read #:pty-write))
+           #:open-pty #:with-pty #:pty-read #:pty-write #:run-external #:spawn-pipeline))
 
 (defpackage #:nshell.infrastructure.terminal
   (:use #:cl)
