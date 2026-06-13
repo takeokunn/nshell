@@ -34,96 +34,84 @@
            (nshell.infrastructure.acl:run-external cmd args))))
     (t (format t "nshell: cannot execute~%"))))
 
-;; ── Fish-style interactive input loop ──────────────────────
-(defun read-char-raw ()
-  "Read a single character in raw mode."
-  (let ((ch (read-char *standard-input* nil nil)))
-    ch))
+;; ── Fish-style interactive input loop with persistent string buffer ──
+(defstruct fish-input-state
+  (buffer "" :type string)
+  (pos 0 :type integer))
 
 (defun fish-input-loop (history kb config)
-  "Fish-style interactive input loop with autosuggest/completion/highlight."
-  (let ((input (make-string-output-stream))
-        (cursor 0)
-        (ch nil))
-    (declare (ignore cursor))
+  "Fish-style interactive input loop with non-destructive rendering."
+  (let ((state (make-fish-input-state)))
     (loop
-      ;; Render: prompt + input line
+      ;; Render current state
       (nshell.infrastructure.terminal:ansi-clear-line)
       (format t "~c" #\Return)
       (render-prompt config nil)
-      (let ((text (get-output-stream-string input)))
-        ;; Highlight the input
+      (let ((text (fish-input-state-buffer state)))
+        ;; Highlight and display
         (handler-case
             (let ((spans (highlight-line text)))
               (format t "~a" (highlight->ansi spans text
                                               (nshell.domain.configuration:config-theme config))))
           (error ()
-            ;; Fallback: plain text
             (format t "~a" text)))
-        ;; Show autosuggestion in dim
+        ;; Autosuggestion
         (let ((suggestion (compute-suggestion history text)))
           (when (and suggestion (> (length suggestion) 0))
-            (format t "~C[2m~a~C[0m" #\Esc suggestion #\Esc)))
-        ) ;; close outer let
+            (format t "~C[2m~a~C[0m" #\Esc suggestion #\Esc))))
       (finish-output)
       ;; Read next character
-      (setf ch (read-char-raw))
-      (cond
-        ((null ch)
-         ;; EOF
-         (setf *running* nil)
-         (return))
-        ((char= ch #\Newline)
-         ;; Execute on Enter
-         (let ((text (get-output-stream-string input)))
-           (format t "~%")
-           (when (not (string= text ""))
-             (handler-case
-                 (let ((result (nshell.domain.parsing:parse-command-line text)))
-                   (when (nshell.domain.parsing:parse-complete-p result)
-                     (nshell.domain.history:history-add history text)
-                     (execute-ast (nshell.domain.parsing:parse-result-ast result))))
-               (error (err)
-                 (format t "nshell error: ~a~%" err)))))
+      (let ((ch (read-char-raw)))
+        (cond
+          ((null ch)
+           (setf *running* nil)
            (return))
-        ((char= ch #\Tab)
-         ;; Tab completion
-         (let ((text (get-output-stream-string input)))
-           (when (> (length text) 0)
-             (let ((candidates (nshell.domain.completion:complete kb text)))
-               (render-completions candidates))
-             ;; Reset input line for candidates
-             (setf input (make-string-output-stream))
-             (write-string text input))))
-        ((char= ch #\Backspace)
-         ;; Handle backspace
-         (let ((text (get-output-stream-string input)))
-           (when (> (length text) 0)
-             (setf input (make-string-output-stream))
-             (write-string (subseq text 0 (1- (length text))) input))))
-        ((char= (code-char 27) ch)
-         ;; ESC - could be arrow key sequence, ignore for now
-         (read-char-raw)  ; consume [
-         (read-char-raw)) ; consume direction
-        ((char= (code-char 12) ch)
-         ;; Ctrl-L - clear screen
-         (nshell.infrastructure.terminal:ansi-clear-screen))
-        ((char= (code-char 3) ch)
-         ;; Ctrl-C - interrupt
-         (format t "^C~%")
-         (return))
-        ((char= (code-char 4) ch)
-         ;; Ctrl-D - EOF
-         (let ((text (get-output-stream-string input)))
-           (when (string= text "")
-             (setf *running* nil)
-             (return))))
-        ((and (>= (char-code ch) 32) (<= (char-code ch) 126))
-         ;; Printable character
-         (format input "~c" ch))
-        (t
-         ;; Ignore other control chars
-         nil)))))
+          ((char= ch #\Newline)
+           (let ((text (fish-input-state-buffer state)))
+             (format t "~%")
+             (when (not (string= text ""))
+               (handler-case
+                   (let ((result (nshell.domain.parsing:parse-command-line text)))
+                     (when (nshell.domain.parsing:parse-complete-p result)
+                       (nshell.domain.history:history-add history text)
+                       (execute-ast (nshell.domain.parsing:parse-result-ast result))))
+                 (error (err)
+                   (format t "nshell error: ~a~%" err)))))
+           (return))
+          ((char= ch #\Tab)
+           (let ((text (fish-input-state-buffer state)))
+             (when (> (length text) 0)
+               (let ((candidates (nshell.domain.completion:complete kb text)))
+                 (render-completions candidates)
+                 ;; Restore display after completions
+                 (format t "~c" #\Return)
+                 (render-prompt config nil)
+                 (format t "~a" text)))))
+          ((char= ch #\Backspace)
+           (let ((text (fish-input-state-buffer state)))
+             (when (> (length text) 0)
+               (setf (fish-input-state-buffer state)
+                     (subseq text 0 (1- (length text)))))))
+          ((char= (code-char 27) ch)
+           ;; ESC - consume arrow key sequence
+           (read-char-raw)
+           (read-char-raw))
+          ((char= (code-char 12) ch)
+           ;; Ctrl-L - clear screen
+           (nshell.infrastructure.terminal:ansi-clear-screen))
+          ((char= (code-char 3) ch)
+           (format t "^C~%")
+           (setf (fish-input-state-buffer state) ""))
+          ((char= (code-char 4) ch)
+           (let ((text (fish-input-state-buffer state)))
+             (when (string= text "")
+               (setf *running* nil)
+               (return))))
+          ((and (>= (char-code ch) 32) (<= (char-code ch) 126))
+           ;; Append printable character to buffer
+           (setf (fish-input-state-buffer state)
+                 (concatenate 'string (fish-input-state-buffer state) (string ch))))
+          (t nil))))))
 
 (defun run-repl ()
   "Fish-inspired interactive REPL with real-time features."
