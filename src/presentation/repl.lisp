@@ -43,7 +43,7 @@
 (defun fish-input-loop (history kb config)
   "Fish-style interactive input loop with autosuggest/completion/highlight."
   (let ((input (make-string-output-stream))
-        (cursor 0)
+        (cursor 0) (declare (ignore cursor))
         (ch nil))
     (loop
       ;; Render: prompt + input line
