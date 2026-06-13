@@ -2,24 +2,29 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (require :sb-posix))
 
+(defun copy-stream (in out)
+  "Copy bytes from IN to OUT preserving exact content."
+  (let ((buf (make-array 4096 :element-type '(unsigned-byte 8))))
+    (loop for n = (read-sequence buf in)
+          while (plusp n)
+          do (write-sequence buf out :end n))))
+
 (defun run-external (cmd args)
-  "Run an external command, print its output, return exit code."
+  "Run external command, print its output, return exit code."
   (handler-case
       (let ((proc (sb-ext:run-program cmd args
                     :output :stream :error :output :wait t :search t)))
         (when proc
           (let ((out (sb-ext:process-output proc)))
             (when out
-              (loop for line = (read-line out nil nil)
-                    while line do (write-line line))))
+              (copy-stream out *standard-output*)))
           (sb-ext:process-exit-code proc)))
     (error (err)
       (format *error-output* "nshell: ~a: ~a~%" cmd err)
       1)))
 
 (defun spawn-pipeline (commands)
-  "Execute commands as a pipeline. Uses stream-based pipe connections
-by reading output of each process and feeding it to the next."
+  "Execute commands as pipeline with byte-correct stream connections."
   (let* ((n (length commands))
          (procs nil)
          (prev-output nil))
@@ -37,25 +42,18 @@ by reading output of each process and feeding it to the next."
                              (format *error-output* "nshell: ~a: ~a~%" cmd err)
                              nil))))
                (when proc
-                 ;; Feed previous output to this process's input
                  (when prev-output
                    (let ((in (sb-ext:process-input proc)))
                      (when in
-                       (handler-case
-                           (loop for line = (read-line prev-output nil nil)
-                                 while line
-                                 do (write-line line in))
+                       (handler-case (copy-stream prev-output in)
                          (error ()))
                        (close in))))
                  (push proc procs)
                  (setf prev-output (sb-ext:process-output proc)))))
-    ;; Drain final output and wait
     (let ((exit 0))
       (dolist (proc (reverse procs))
         (when prev-output
-          (handler-case
-              (loop for line = (read-line prev-output nil nil)
-                    while line do (write-line line))
+          (handler-case (copy-stream prev-output *standard-output*)
             (error ()))
           (setf prev-output nil))
         (sb-ext:process-wait proc)
