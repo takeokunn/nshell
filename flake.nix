@@ -24,16 +24,22 @@
             lispLibs = [];
             buildScript = pkgs.writeText "build-nshell.lisp" ''
               (require :asdf)
-              (setf asdf:*compile-file-warnings-behaviour* :ignore)
-              (setf asdf:*compile-file-failure-behaviour* :warn)
+              (setf asdf:*compile-file-warnings-behaviour* :warn)
               (push (truename "./") asdf:*central-registry*)
-              (handler-bind ((warning (lambda (c) (muffle-warning c))))
-                (asdf:load-system :nshell))
+              (asdf:load-system :nshell)
               (sb-ext:save-lisp-and-die "nshell"
                 :executable t
                 :compression t
                 :toplevel #'nshell:main)
             '';
+          };
+
+          test = pkgs.sbcl.buildASDFSystem {
+            pname = "nshell-test";
+            version = "0.1.0";
+            src = ./.;
+            systems = [ "nshell/test" ];
+            lispLibs = [ pkgs.sbclPackages.fiveam ];
           };
         });
 
@@ -51,7 +57,7 @@
         {
           default = pkgs.mkShell {
             packages = [
-              (pkgs.sbcl.withPackages (ps: []))
+              (pkgs.sbcl.withPackages (ps: [ ps.fiveam ]))
             ];
             shellHook = ''
               export CL_SOURCE_REGISTRY=$PWD

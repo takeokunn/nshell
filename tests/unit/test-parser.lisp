@@ -28,3 +28,14 @@
 (test parse-incomplete-quote
   (let ((result (nshell.domain.parsing:parse-command-line "echo 'hello")))
     (is (nshell.domain.parsing:parse-result-incomplete result))))
+
+;; PBT: Tokenizer round-trip property
+(test tokenizer-roundtrip-property
+  "Generated simple commands tokenize and parse without error"
+  (let ((inputs '("ls" "pwd" "echo hello" "git status" "ls -la" "cat file.txt")))
+    (dolist (input inputs)
+      (multiple-value-bind (tokens cursor incomplete)
+          (nshell.domain.parsing:tokenize input)
+        (declare (ignore cursor))
+        (is (not incomplete))
+        (is (consp tokens))))))

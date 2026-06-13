@@ -48,3 +48,26 @@
    (:file "presentation/autosuggest")
    (:file "presentation/highlight")
    (:file "main")))
+
+(defsystem "nshell/test"
+  :version "0.1.0"
+  :author "nshell contributors"
+  :license "MIT"
+  :description "Test system for nshell"
+  :depends-on ("nshell" "fiveam")
+  :pathname "tests"
+  :serial t
+  :components
+  ((:file "package")
+   (:file "test-runner")
+   (:file "unit/test-domain-events")
+   (:file "unit/test-signals")
+   (:file "unit/test-execution-domain")
+   (:file "unit/test-history-domain")
+   (:file "unit/test-configuration")
+   (:file "unit/test-tokenizer")
+   (:file "unit/test-unification")
+   (:file "unit/test-parser"))
+  :perform (test-op (o s)
+             (uiop:symbol-call :fiveam '#:run!
+                               (uiop:find-symbol* '#:nshell-tests :nshell/test))))
