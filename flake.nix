@@ -14,21 +14,33 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          sbcl = pkgs.sbcl;
         in
         {
-          default = pkgs.sbcl.buildASDFSystem {
+          default = pkgs.stdenv.mkDerivation {
             pname = "nshell";
             version = "0.1.0";
             src = ./.;
-            systems = [ "nshell" ];
-            lispLibs = [];  # ZERO external dependencies
-            buildScript = pkgs.writeText "build-nshell.lisp" ''
-              (require :asdf)
-              (asdf:load-system :nshell)
-              (sb-ext:save-lisp-and-die "nshell"
-                :executable t
-                :compression t
-                :toplevel #'nshell:main)
+
+            nativeBuildInputs = [ sbcl ];
+
+            buildPhase = ''
+              export HOME=$TMPDIR
+              export CL_SOURCE_REGISTRY=$PWD
+              sbcl --non-interactive \
+                --eval '(require :asdf)' \
+                --eval '(push (truename "./") asdf:*central-registry*)' \
+                --eval '(asdf:load-system :nshell)' \
+                --eval '(sb-ext:save-lisp-and-die "nshell"
+                          :executable t
+                          :compression t
+                          :toplevel #'"'"'nshell:main)'
+            '';
+
+            installPhase = ''
+              mkdir -p $out/bin
+              cp nshell $out/bin/
+              chmod +x $out/bin/nshell
             '';
           };
         });
@@ -36,7 +48,7 @@
       apps = forAllSystems (system: {
         default = {
           type = "app";
-          program = "${self.packages.${system}.default}/nshell";
+          program = "${self.packages.${system}.default}/bin/nshell";
         };
       });
 
@@ -47,7 +59,7 @@
         {
           default = pkgs.mkShell {
             packages = [
-              (pkgs.sbcl.withPackages (ps: []))  # Zero deps dev shell
+              (pkgs.sbcl.withPackages (ps: []))
             ];
             shellHook = ''
               export CL_SOURCE_REGISTRY=$PWD
