@@ -118,8 +118,8 @@ redirects is a list of (op . target) pairs where op is :> :>> or :<."
                        ;; Persist to file history
                        (nshell.infrastructure.persistence:append-history-entry text)
                         (execute-ast (nshell.domain.parsing:parse-result-ast result))
-                        (nshell.infrastructure.acl:restore-redirects))))
-                 (error (err)
+                        (nshell.infrastructure.acl:restore-redirects)))
+                  (error (err)
                    (format t "nshell error: ~a~%" err)))))
            (return))
           ((char= ch #\Tab)
