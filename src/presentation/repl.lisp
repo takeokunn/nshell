@@ -35,9 +35,9 @@
     (t (format t "nshell: cannot execute~%"))))
 
 ;; ── Fish-style interactive input loop with persistent string buffer ──
-(defstruct fish-input-state
-  (buffer "" :type string)
-  (pos 0 :type integer))
+(defun read-char-raw ()
+  "Read a single character from standard input, or NIL on EOF."
+  (read-char *standard-input* nil nil))
 
 (defun fish-input-loop (history kb config)
   "Fish-style interactive input loop with non-destructive rendering."
@@ -66,7 +66,7 @@
           ((null ch)
            (setf *running* nil)
            (return))
-          ((char= ch #\Newline)
+          ((or (char= ch #\Newline) (char= ch #\Return))
            (let ((text (fish-input-state-buffer state)))
              (format t "~%")
              (when (not (string= text ""))
