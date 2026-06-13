@@ -42,7 +42,7 @@
            #:make-argument-node #:make-operator-node #:make-error-node
            #:command-node-p #:pipeline-node-p #:command-node-command #:command-node-args
            #:pipeline-node-commands
-           #:var-p #:make-var #:unify #:walk #:extend-bindings #:backtrack
+           #:var-p #:make-var #:unify #:walk #:extend-bindings #:backtrack #:unify-p
            #:parse-complete-p #:parse-errors #:parse-result-ast #:parse-result-incomplete))
 
 (defpackage #:nshell.domain.completion

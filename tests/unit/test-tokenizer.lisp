@@ -36,7 +36,7 @@
   (multiple-value-bind (tokens cursor incomplete)
       (nshell.domain.parsing:tokenize "echo 'hello")
     (declare (ignore tokens cursor))
-    (is incomplete)))
+    (is (not (null incomplete)))))
 
 (test append-redirect
   (multiple-value-bind (tokens cursor incomplete)
