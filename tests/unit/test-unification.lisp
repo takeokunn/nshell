@@ -8,7 +8,7 @@
 
 (test unify-atoms
   (let ((b (nshell.domain.parsing:unify 'foo 'foo)))
-    (is b)))
+    (is (not (null b)))))
 
 (test unify-different-atoms
   (let ((b (nshell.domain.parsing:unify 'foo 'bar)))
@@ -17,13 +17,13 @@
 (test unify-variable-with-value
   (let* ((x (nshell.domain.parsing:make-var "X"))
          (b (nshell.domain.parsing:unify x 'hello)))
-    (is b)
+    (is (not (null b))))
     (is (eq 'hello (nshell.domain.parsing:walk x b)))))
 
 (test unify-lists
   (let* ((x (nshell.domain.parsing:make-var "X"))
          (b (nshell.domain.parsing:unify (list x 'b) '(a b))))
-    (is b)
+    (is (not (null b))))
     (is (eq 'a (nshell.domain.parsing:walk x b)))))
 
 (test occurs-check
@@ -35,7 +35,7 @@
   (let* ((x (nshell.domain.parsing:make-var "X"))
          (goal (lambda (b) (nshell.domain.parsing:unify x 42 b)))
          (result (nshell.domain.parsing:backtrack (list goal))))
-    (is result)
+    (is (not (null result)))
     (is (= 42 (nshell.domain.parsing:walk x result)))))
 
 (test walk-resolves-chain

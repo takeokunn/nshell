@@ -22,7 +22,7 @@
 (defun highlight->ansi (spans input theme)
   (declare (ignore theme))
   (let ((result (make-string-output-stream)))
-    (loop with pos = 0
+    (let ((pos 0))
           for span in spans
           do (write-string (subseq input pos (highlight-span-start span)) result)
              (case (highlight-span-role span)
@@ -36,3 +36,4 @@
              (setf pos (highlight-span-end span)))
     (write-string (subseq input pos) result)
     (get-output-stream-string result)))
+  (get-output-stream-string result)))

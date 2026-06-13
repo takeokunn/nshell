@@ -1,3 +1,25 @@
 (in-package #:nshell.domain.events)
 
-;;; Ensure the event API is externally visible without changing package.lisp.
+(defstruct (domain-event (:constructor make-domain-event (type &optional (timestamp (get-universal-time)))))
+  (type nil :type keyword :read-only t)
+  (timestamp (get-universal-time) :type integer :read-only t))
+
+(defun event-type (event) (domain-event-type event))
+(defun event-timestamp (event) (domain-event-timestamp event))
+(defun event-type-p (event expected) (eq (domain-event-type event) expected))
+(defun make-event (type &optional ts) (make-domain-event type ts))
+
+(defun make-command-entered-event (text) (declare (ignore text)) (make-domain-event :command-entered))
+(defun make-command-parsed-event (ast) (declare (ignore ast)) (make-domain-event :command-parsed))
+(defun make-parse-failed-event (text msg) (declare (ignore text msg)) (make-domain-event :parse-failed))
+(defun make-pipeline-started-event (pipe id) (declare (ignore pipe id)) (make-domain-event :pipeline-started))
+(defun make-process-created-event (id pid) (declare (ignore id pid)) (make-domain-event :process-created))
+(defun make-process-exited-event (id code) (declare (ignore id code)) (make-domain-event :process-exited))
+(defun make-pipeline-completed-event (id code) (declare (ignore id code)) (make-domain-event :pipeline-completed))
+(defun make-job-created-event (id cmd pgid) (declare (ignore id cmd pgid)) (make-domain-event :job-created))
+(defun make-job-stopped-event (id sig) (declare (ignore id sig)) (make-domain-event :job-stopped))
+(defun make-job-continued-event (id) (declare (ignore id)) (make-domain-event :job-continued))
+(defun make-job-completed-event (id code) (declare (ignore id code)) (make-domain-event :job-completed))
+(defun make-signal-caught-event (sig) (declare (ignore sig)) (make-domain-event :signal-caught))
+(defun make-command-appended-to-history-event (entry) (declare (ignore entry)) (make-domain-event :command-appended-to-history))
+(defun make-completion-triggered-event (prefix) (declare (ignore prefix)) (make-domain-event :completion-triggered))
