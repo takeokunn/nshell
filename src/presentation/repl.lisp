@@ -43,8 +43,9 @@
 (defun fish-input-loop (history kb config)
   "Fish-style interactive input loop with autosuggest/completion/highlight."
   (let ((input (make-string-output-stream))
-        (cursor 0) (declare (ignore cursor))
+        (cursor 0)
         (ch nil))
+    (declare (ignore cursor))
     (loop
       ;; Render: prompt + input line
       (nshell.infrastructure.terminal:ansi-clear-line)
