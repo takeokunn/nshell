@@ -172,21 +172,7 @@
 (defun render-prompt-cont ()
   (unless *running* (return-from render-prompt-cont (done)))
   ;; Reap completed children and update job states
-  (handler-case
-      (dolist (r (nshell.infrastructure.acl:reap-children))
-        (let ((pid (car r)))
-          (dolist (job (nshell.domain.job-control:monitor-jobs nshell.application:*job-monitor*))
-            (when (and (nshell.domain.execution:job-background-p job)
-                       (member pid (nshell.domain.execution:job-pids job)))
-              (nshell.domain.job-control:monitor-update
-               nshell.application:*job-monitor*
-               (nshell.domain.execution:job-id job) :completed (cdr r))
-              (setf (nshell.domain.execution:job-pids job)
-                    (remove pid (nshell.domain.execution:job-pids job)))
-              (format t "~%Completed: [~d] ~s~%"
-                      (nshell.domain.execution:job-id job)
-                      (nshell.domain.execution:job-command-line job))))))
-    (error ()))
+  (nshell.application:reap-current-jobs nshell.application:*job-monitor*)
   (nshell.infrastructure.terminal:ansi-clear-line) (format t "~c" #\Return)
   (render-prompt *config* *last-exit-code*)
   (let* ((text (input-state-buffer *input-state*)) (theme (nshell.domain.configuration:config-theme *config*)))
