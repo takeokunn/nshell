@@ -1,6 +1,7 @@
 ;;; nshell package definitions
 ;;; DDD architecture: domain/ must not import from application/, infrastructure/, or presentation/
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
 ;; ── Main package ──────────────────────────────────────────
 (defpackage #:nshell
   (:use #:cl)
@@ -103,3 +104,4 @@
            #:render-completions #:cycle-completion #:apply-completion
            #:highlight-line #:highlight-span #:highlight-role
            #:highlight->ansi))
+)
