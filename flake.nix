@@ -14,7 +14,7 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          sbclWithAsdf = pkgs.sbcl.withPackages (ps: [ ps.asdf ]);
+          sbcl = pkgs.sbcl;
         in
         {
           default = pkgs.stdenv.mkDerivation {
@@ -22,11 +22,12 @@
             version = "0.1.0";
             src = ./.;
 
-            nativeBuildInputs = [ sbclWithAsdf ];
+            nativeBuildInputs = [ sbcl ];
 
             buildPhase = ''
               export HOME=$TMPDIR
               sbcl --noinform --non-interactive \
+                --eval '(require :asdf)' \
                 --eval '(push (truename "./") asdf:*central-registry*)' \
                 --eval '(asdf:load-system :nshell)' \
                 --eval '(sb-ext:save-lisp-and-die "nshell" :executable t :compression t :toplevel (quote nshell:main))'
