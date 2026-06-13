@@ -184,4 +184,4 @@ redirects is a list of (op . target) pairs where op is :> :>> or :<."
     (unwind-protect
          (loop while *running* do (fish-input-loop history kb config))
       (nshell.infrastructure.terminal:restore-terminal-mode)
-      (format t "Goodbye!~%"))))
+      (format t "Goodbye!~%")))))
