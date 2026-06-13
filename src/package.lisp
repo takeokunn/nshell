@@ -82,6 +82,7 @@
   (:use #:cl)
   (:export #:make-event-dispatcher #:publish-event #:subscribe #:drain-events
            #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
+           #:execute-external
            #:fg #:bg #:jobs #:interrupt-foreground #:suspend-foreground
            #:history-suggestion #:search-history-use-case))
 
