@@ -111,6 +111,7 @@
                                   (not prev-sep)
                                   (eq :semi prev-sep)
                                   (eq :pipe prev-sep)
+                                  (eq :amp prev-sep)
                                   (and (eq :and prev-sep) (= code 0))
                                   (and (eq :or prev-sep) (/= code 0)))
              do (when should-run
