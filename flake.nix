@@ -14,7 +14,7 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          sbcl = pkgs.sbcl;
+          sbclWithAsdf = pkgs.sbcl.withPackages (ps: [ ps.asdf ]);
         in
         {
           default = pkgs.stdenv.mkDerivation {
@@ -22,7 +22,7 @@
             version = "0.1.0";
             src = ./.;
 
-            nativeBuildInputs = [ sbcl ];
+            nativeBuildInputs = [ sbclWithAsdf ];
 
             buildPhase = ''
               export HOME=$TMPDIR
