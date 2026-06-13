@@ -96,7 +96,7 @@
 
 (defpackage #:nshell.infrastructure.terminal
   (:use #:cl)
-  (:export #:with-raw-terminal #:enable-raw-mode
+  (:export #:with-raw-terminal #:enable-raw-mode #:restore-terminal-mode
            #:ansi-clear-screen #:ansi-clear-line #:ansi-move-cursor
            #:ansi-set-color #:ansi-reset #:ansi-bold #:ansi-dim
            #:make-screen #:screen-render #:screen-diff
