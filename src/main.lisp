@@ -5,7 +5,7 @@
   (format t "nshell v0.1.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
           (lisp-implementation-version))
   (handler-case
-      (nshell.presentation:run-repl-simple)
+      (nshell.presentation:run-repl)
     (error (e)
       (format *error-output* "Fatal error: ~a~%" e)
       (sb-ext:exit :code 1)))
