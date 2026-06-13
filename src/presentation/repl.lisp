@@ -41,14 +41,8 @@
            (apply-redirects redirects)
            (cond
              ((nshell.domain.parsing:pipeline-node-p ast)
-              (let ((cmds (nshell.domain.parsing:pipeline-node-commands ast)))
-                (when cmds (let ((last-cmd (car (last cmds))))
-                  (when (nshell.domain.parsing:command-node-p last-cmd)
-                    (multiple-value-bind (clean r) (extract-redirects (nshell.domain.parsing:command-node-args last-cmd))
-                      (setf (nshell.domain.parsing:command-node-args last-cmd) clean)
-                      (setf redirects (append redirects r))))))
-                (nshell.infrastructure.acl:spawn-pipeline cmds))
-              (nshell.infrastructure.acl:spawn-pipeline (nshell.domain.parsing:pipeline-node-commands ast)))
+              (nshell.infrastructure.acl:spawn-pipeline
+               (nshell.domain.parsing:pipeline-node-commands ast)))
              ((and cmd (let ((cleaned-ast (nshell.domain.parsing:make-command-node cmd args)))
                          (execute-builtin cleaned-ast))))
              ((and cmd) (nshell.infrastructure.acl:run-external cmd args))
