@@ -11,7 +11,7 @@
        (not (parse-result-incomplete result))))
 
 (defun parse-errors (result)
-  (parse-result-errors-list result))
+  (parse-result-errors result))
 
 (defun parse-command-line (input &key (cursor-pos nil))
   (multiple-value-bind (tokens cursor-token incomplete)

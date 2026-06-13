@@ -7,23 +7,21 @@
 (in-suite unification-tests)
 
 (test unify-atoms
-  (let ((b (nshell.domain.parsing:unify 'foo 'foo)))
-    (is (not (null b)))))
+  (is (not (null (nshell.domain.parsing:unify 'foo 'foo)))))
 
 (test unify-different-atoms
-  (let ((b (nshell.domain.parsing:unify 'foo 'bar)))
-    (is (null b))))
+  (is (null (nshell.domain.parsing:unify 'foo 'bar))))
 
 (test unify-variable-with-value
   (let* ((x (nshell.domain.parsing:make-var "X"))
          (b (nshell.domain.parsing:unify x 'hello)))
-    (is (not (null b))))
+    (is (not (null b)))
     (is (eq 'hello (nshell.domain.parsing:walk x b)))))
 
 (test unify-lists
   (let* ((x (nshell.domain.parsing:make-var "X"))
          (b (nshell.domain.parsing:unify (list x 'b) '(a b))))
-    (is (not (null b))))
+    (is (not (null b)))
     (is (eq 'a (nshell.domain.parsing:walk x b)))))
 
 (test occurs-check

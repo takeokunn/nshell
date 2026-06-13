@@ -4,7 +4,7 @@
                        (:conc-name pipeline-))
     (commands-list nil :type list :read-only t)))
 (defun make-pipeline (&rest commands)
-  (apply #'%make-pipeline commands))
+  (%make-pipeline commands))
 (defun pipeline-commands (pipe) (pipeline-commands-list pipe))
 (defun pipeline-single-command-p (pipe) (= (length (pipeline-commands-list pipe)) 1))
 (defun pipeline-empty-p (pipe) (null (pipeline-commands-list pipe)))
