@@ -99,13 +99,15 @@
 
 (defun jobs ()
   "Print and return current jobs."
-  (let ((jobs (nshell.domain.job-control:monitor-jobs *job-monitor*)))
-    (dolist (job jobs)
-      (format t "[~d] ~a ~a~%"
-              (nshell.domain.execution:job-id job)
-              (%status-label job)
-              (%job-command-string job)))
-    jobs))
+  (let ((entries (nshell.domain.job-control:monitor-entries *job-monitor*)))
+    (dolist (entry entries)
+      (let ((jid (car entry))
+            (job (cdr entry)))
+        (format t "[~d] ~a ~a~%"
+                jid
+                (%status-label job)
+                (%job-command-string job))))
+    entries))
 
 (defun disown (job-id)
   "Remove JOB-ID from the job monitor."

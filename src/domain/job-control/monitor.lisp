@@ -21,6 +21,12 @@
 (defun monitor-jobs (monitor)
   (loop for v being the hash-values of (job-monitor-jobs monitor) collect v))
 
+(defun monitor-entries (monitor)
+  "Return all tracked jobs as (id . job) alist."
+  (loop for k being the hash-keys of (job-monitor-jobs monitor)
+        for v being the hash-values of (job-monitor-jobs monitor)
+        collect (cons k v)))
+
 (defun monitor-find-job (monitor job-id)
   (gethash job-id (job-monitor-jobs monitor)))
 

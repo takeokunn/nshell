@@ -87,7 +87,7 @@
 (defpackage #:nshell.domain.job-control
   (:use #:cl)
   (:export #:make-job-monitor #:monitor-add-job #:monitor-update
-            #:monitor-jobs #:monitor-find-job
+            #:monitor-jobs #:monitor-entries #:monitor-find-job
             #:monitor-remove-job
             #:suspend-job #:resume-job #:foreground-job))
 
