@@ -15,6 +15,12 @@
     (nshell.domain.history:history-add history line)
     (is (= 1 (nshell.domain.history:history-size history)))))
 (test e2e-pipeline-smoke
-  "Verify pipeline infrastructure works via ACL"
-  (let ((exit-code (nshell.infrastructure.acl:run-external "echo" '("test"))))
-    (is (= 0 exit-code))))
+  "Verify pipeline execution via spawn-pipeline"
+  (let* ((cmd1 (nshell.domain.parsing:make-command-node "echo" '("hello")))
+         (pipe (nshell.domain.parsing:make-pipeline-node (list cmd1)))
+         (exit (nshell.infrastructure.acl:spawn-pipeline (list cmd1))))
+    (is (= 0 exit))))
+(test e2e-external-command
+  "External command execution returns correct exit code"
+  (is (= 0 (nshell.infrastructure.acl:run-external "true" '())))
+  (is (not (= 0 (nshell.infrastructure.acl:run-external "false" '())))))
