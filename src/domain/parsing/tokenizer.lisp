@@ -6,10 +6,7 @@
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t))
 
-(defun token-type (tok) (token-type-val tok))
-(defun token-value (tok) (token-value-str tok))
-(defun token-start (tok) (token-start-pos tok))
-(defun token-end (tok) (token-end-pos tok))
+;; token-type, token-value, token-start, token-end are auto-generated struct accessors
 
 (defun tokenize (input &key (cursor-pos nil))
   (let* ((cp (or cursor-pos (length input)))
