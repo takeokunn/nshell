@@ -1,6 +1,6 @@
 (in-package #:nshell.presentation)
 
-;; -- Highlight roles (fish-inspired) ----------------------
+;; Highlight data tables and span type.
 (defstruct (highlight-span (:constructor make-highlight-span (start end role)))
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
@@ -9,9 +9,24 @@
 (defvar *builtin-commands*
   '("echo" "pwd" "ls" "cd" "exit" "fg" "bg" "jobs" "disown"
     "set" "export" "alias" "abbr" "function" "source" "exec"
-    "true" "false" "test" "type" "which" "history" "help")
+    "true" "false" "contains" "test" "type" "which" "history" "help")
   "Commands built into nshell that get distinct highlighting.")
 
+(defparameter +operator-token-types+
+  '(:pipe :and :or :semicolon :ampersand :redirect))
+
+(defparameter +fallback-highlight-ansi+
+  '((:command . "~C[34m")
+    (:builtin . "~C[34;1m")
+    (:argument . "~C[37m")
+    (:option . "~C[36m")
+    (:operator . "~C[33m")
+    (:error . "~C[31m")
+    (:comment . "~C[2;37m")
+    (:quote . "~C[33m")
+    (:normal . "~C[0m")))
+
+;; -- Highlight roles (fish-inspired) ----------------------
 (defun builtin-command-p (name)
   (find name *builtin-commands* :test #'string=))
 
@@ -33,23 +48,37 @@
             :argument))
        ((builtin-command-p token-value) :builtin)
        (t :command)))
-    (:pipe :operator)
-    (:redirect :operator)
+    ((:pipe :and :or :semicolon :ampersand :redirect) :operator)
     (:error :error)
     (t :normal)))
+
+(defun diagnostic-overlaps-token-p (diagnostic token)
+  (let ((diag-start (nshell.domain.parsing:parse-diagnostic-start diagnostic))
+        (diag-end (nshell.domain.parsing:parse-diagnostic-end diagnostic))
+        (token-start (nshell.domain.parsing:token-start token))
+        (token-end (nshell.domain.parsing:token-end token)))
+    (and (< diag-start token-end)
+         (< token-start diag-end))))
 
 (defun highlight-line (input)
   "Parse INPUT and return highlight spans for fish-style syntax coloring."
   (multiple-value-bind (tokens cursor incomplete)
       (nshell.domain.parsing:tokenize input)
-    (declare (ignore cursor incomplete))
-    (let ((first-word t))
+      (declare (ignore cursor incomplete))
+      (let ((first-word t)
+          (diagnostics (nshell.domain.parsing:parse-errors
+                        (nshell.domain.parsing:parse-command-line input))))
       (mapcar (lambda (tok)
                 (let* ((type (nshell.domain.parsing:token-type tok))
                        (value (nshell.domain.parsing:token-value tok))
-                       (role (classify-token-role type value first-word)))
+                       (role (if (some (lambda (diagnostic)
+                                         (diagnostic-overlaps-token-p diagnostic tok))
+                                       diagnostics)
+                                 :error
+                                 (classify-token-role type value first-word))))
                   (when (eq type :word) (setf first-word nil))
-                  (when (eq type :pipe) (setf first-word t))
+                  (when (member type +operator-token-types+ :test #'eq)
+                    (setf first-word t))
                   (make-highlight-span
                    (nshell.domain.parsing:token-start tok)
                    (nshell.domain.parsing:token-end tok)
@@ -58,6 +87,11 @@
 
 (defun highlight-role (span) (highlight-span-role span))
 
+;; Rendering helpers for highlight spans.
+(defun fallback-highlight-control (role)
+  (or (cdr (assoc role +fallback-highlight-ansi+ :test #'eq))
+      "~C[0m"))
+
 (defun theme-color->ansi (theme role)
   "Convert a highlight ROLE to ANSI escape using THEME colors.
    Falls back to known ANSI 16-color codes when theme lookup fails."
@@ -65,20 +99,7 @@
     (if color
         (let ((code (nshell.infrastructure.terminal::ansi-color-code color)))
           (format nil "~C[3~dm" #\Esc code))
-        ;; Fallback: hard-coded fish-style colors
-        (format nil
-                (case role
-                  (:command "~C[34m")       ; blue
-                  (:builtin "~C[34;1m")     ; bright blue
-                  (:argument "~C[37m")      ; white
-                  (:option "~C[36m")        ; cyan
-                  (:operator "~C[33m")      ; yellow
-                  (:error "~C[31m")         ; red
-                  (:comment "~C[2;37m")     ; dim white
-                  (:quote "~C[33m")         ; yellow (strings)
-                  (:normal "~C[0m")         ; reset
-                  (otherwise "~C[0m"))
-                #\Esc))))
+        (format nil (fallback-highlight-control role) #\Esc))))
 
 (defun highlight->ansi (spans input theme)
   "Render highlighted INPUT with THEME colors as ANSI escape sequences."

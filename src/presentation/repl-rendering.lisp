@@ -1,0 +1,94 @@
+(in-package #:nshell.presentation)
+
+;; CPS Rendering
+(defun render-highlighted-input-line (text theme)
+  (handler-case
+      (let ((spans (highlight-line text)))
+        (format t "~a" (highlight->ansi spans text theme)))
+    (error ()
+      (format t "~a" text))))
+
+(defun render-edit-buffer (text theme)
+  (loop with start = 0
+        with first-line = t
+        with done = nil
+        until done
+        do (let ((newline-pos (position #\Newline text :start start)))
+             (unless first-line
+               (format t "~%> "))
+             (render-highlighted-input-line
+              (subseq text start (or newline-pos (length text)))
+              theme)
+             (setf first-line nil)
+             (if newline-pos
+                 (setf start (1+ newline-pos))
+                 (setf done t)))))
+
+(defun reset-rendered-prompt-state ()
+  (setf *prompt-rendered-lines* 0
+        *prompt-rendered-cursor-row* 0))
+
+(defun clear-rendered-prompt ()
+  (if (> *prompt-rendered-lines* 0)
+      (let ((rows-below (max 0
+                             (- (1- *prompt-rendered-lines*)
+                                *prompt-rendered-cursor-row*))))
+        (format t "~C" #\Return)
+        (when (plusp rows-below)
+          (format t "~C[~dB" #\Esc rows-below))
+        (nshell.infrastructure.terminal:ansi-clear-line)
+        (loop repeat (1- *prompt-rendered-lines*)
+              do
+          (format t "~C[A" #\Esc)
+          (nshell.infrastructure.terminal:ansi-clear-line))
+        (reset-rendered-prompt-state))
+      (progn
+        (nshell.infrastructure.terminal:ansi-clear-line)
+        (format t "~C" #\Return))))
+
+(defun render-prompt-cont ()
+  (unless *running*
+    (return-from render-prompt-cont (done)))
+  (reap-background-jobs)
+  (clear-rendered-prompt)
+  (let* ((terminal-width
+           (multiple-value-bind (rows cols)
+               (handler-case (nshell.infrastructure.acl:get-terminal-size)
+                 (error () (values 24 80)))
+             (declare (ignore rows))
+             cols))
+         (prompt-width
+           (render-prompt *config* *last-exit-code*
+                          :terminal-width terminal-width))
+         (text (input-state-buffer *input-state*))
+         (theme (nshell.domain.configuration:config-theme *config*))
+         (suggestion (input-state-suggestion *input-state*))
+         (search-query (input-state-search-query *input-state*))
+         (search-suffix (when (eq (input-state-mode *input-state*) :search)
+                          (format nil " history: ~a" search-query))))
+    (render-edit-buffer text theme)
+    (when (and suggestion (> (length suggestion) 0))
+      (format t "~C[2m~a~C[0m" #\Esc suggestion #\Esc))
+    (when search-suffix
+      (format t " ~C[2mhistory: ~a~C[0m" #\Esc search-query #\Esc))
+    (%move-cursor-to-rendered-position text
+                                       (input-state-cursor-pos *input-state*)
+                                       prompt-width
+                                       suggestion
+                                       search-suffix
+                                       :terminal-width terminal-width)
+    (multiple-value-bind (cursor-row cursor-column)
+        (%rendered-buffer-position text
+                                   (input-state-cursor-pos *input-state*)
+                                   prompt-width
+                                   :terminal-width terminal-width)
+      (declare (ignore cursor-column))
+      (setf *prompt-rendered-lines*
+            (%rendered-buffer-line-count text
+                                         :suggestion suggestion
+                                         :search-suffix search-suffix
+                                         :terminal-width terminal-width
+                                         :prompt-width prompt-width)
+            *prompt-rendered-cursor-row* cursor-row)))
+  (finish-output)
+  (lambda () (read-key-cont)))

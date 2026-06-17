@@ -38,6 +38,17 @@
     (is (equal '("EXPORTED" . "yes")
                (assoc "EXPORTED" pairs :test #'string=)))))
 
+(test env-bindings-returns-all-vars-sorted-with-export-state
+  "ENV-BINDINGS exposes local and exported variables for shell-local display."
+  (let* ((env (nshell.domain.environment:make-environment))
+         (env (nshell.domain.environment:env-set env "ZED" "last" nil))
+         (env (nshell.domain.environment:env-set env "ALPHA" "first" t))
+         (bindings (nshell.domain.environment:env-bindings env)))
+    (is (equal '("ALPHA" "ZED")
+               (mapcar #'nshell.domain.environment:env-var-name bindings)))
+    (is (nshell.domain.environment:env-var-exported-p (first bindings)))
+    (is (not (nshell.domain.environment:env-var-exported-p (second bindings))))))
+
 (test default-environment-has-core-variables
   "The default environment contains core shell variables."
   (let ((env (nshell.domain.environment:make-default-environment)))

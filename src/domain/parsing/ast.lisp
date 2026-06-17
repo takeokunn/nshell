@@ -15,11 +15,37 @@
   (commands nil :type list :read-only t))
 
 (defstruct (sequence-node (:include ast-node)
-                          (:constructor make-sequence-node (commands &optional separators span)))
+                           (:constructor make-sequence-node (commands &optional separators span)))
   "Represents ;-separated sequential commands or &-separated background commands.
    SEPARATORS is a list of :semi or :amp keywords, one per command except the last."
   (commands nil :type list :read-only t)
   (separators nil :type list :read-only t))
+
+(defstruct (if-node (:include ast-node)
+                    (:constructor make-if-node (condition then-branch &optional else-branch span)))
+  (condition nil :type (or null ast-node) :read-only t)
+  (then-branch nil :type list :read-only t)
+  (else-branch nil :type list :read-only t))
+
+(defstruct (for-node (:include ast-node)
+                     (:constructor make-for-node (var-name in-values body &optional span)))
+  (var-name "" :type string :read-only t)
+  (in-values nil :type list :read-only t)
+  (body nil :type list :read-only t))
+
+(defstruct (while-node (:include ast-node)
+                       (:constructor make-while-node (condition body &optional span)))
+  (condition nil :type (or null ast-node) :read-only t)
+  (body nil :type list :read-only t))
+
+(defstruct (case-node (:include ast-node)
+                      (:constructor make-case-node (value clauses &optional span)))
+  (value "" :type string :read-only t)
+  (clauses nil :type list :read-only t))
+
+(defstruct (begin-end-node (:include ast-node)
+                           (:constructor make-begin-end-node (body &optional span)))
+  (body nil :type list :read-only t))
 
 (defstruct (argument-node (:include ast-node)
                           (:constructor make-argument-node (value &optional span)))
@@ -45,9 +71,20 @@
 
 (defun ast-has-errors-p (node)
   (labels ((check (n)
-              (cond ((error-node-p n) t)
-                    ((pipeline-node-p n) (some #'check (pipeline-node-commands n)))
-                    (t nil))))
+               (cond ((error-node-p n) t)
+                     ((pipeline-node-p n) (some #'check (pipeline-node-commands n)))
+                     ((sequence-node-p n) (some #'check (sequence-node-commands n)))
+                     ((if-node-p n) (or (check (if-node-condition n))
+                                        (some #'check (if-node-then-branch n))
+                                        (some #'check (if-node-else-branch n))))
+                     ((for-node-p n) (some #'check (for-node-body n)))
+                     ((while-node-p n) (or (check (while-node-condition n))
+                                           (some #'check (while-node-body n))))
+                     ((case-node-p n) (some (lambda (clause)
+                                              (some #'check (cdr clause)))
+                                            (case-node-clauses n)))
+                     ((begin-end-node-p n) (some #'check (begin-end-node-body n)))
+                     (t nil))))
     (check node)))
 
 ;; -- Arg utilities (cons-based arg support) -----------------

@@ -6,18 +6,10 @@
 
 (in-suite job-control-integration-tests)
 
-(defun %test-job (id command &optional args)
-  (let* ((cmd (nshell.domain.execution:make-command command args))
-         (pipe (nshell.domain.execution:make-pipeline cmd))
-         (job (nshell.domain.execution:make-job id pipe)))
-    (setf (nshell.domain.execution:job-command-line job)
-          (format nil "~{~a~^ ~}" (nshell.domain.execution:command-to-list cmd)))
-    job))
-
 (test job-creation-assigns-unique-ids
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (job1 (%test-job 0 "sleep" '("1")))
-         (job2 (%test-job 1 "sleep" '("2")))
+         (job1 (make-test-job 0 "sleep" :args '("1")))
+         (job2 (make-test-job 1 "sleep" :args '("2")))
          (id1 (nshell.domain.job-control:monitor-add-job monitor job1))
          (id2 (nshell.domain.job-control:monitor-add-job monitor job2)))
     (is (not (= id1 id2)))
@@ -26,7 +18,7 @@
 
 (test job-state-transitions-created-running-stopped-completed
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (job (%test-job 0 "sleep" '("1")))
+         (job (make-test-job 0 "sleep" :args '("1")))
          (id (nshell.domain.job-control:monitor-add-job monitor job)))
     (is (eq :created (nshell.domain.execution:job-state job)))
     (nshell.domain.job-control:monitor-update monitor id :running)
@@ -39,7 +31,7 @@
 
 (test jobs-returns-current-job-list
   (let* ((monitor (nshell.domain.job-control:make-job-monitor))
-         (job (%test-job 0 "echo" '("hello"))))
+         (job (make-test-job 0 "echo" :args '("hello"))))
     (nshell.domain.job-control:monitor-add-job monitor job)
     (let ((returned (nshell.domain.job-control:monitor-jobs monitor)))
       (is (= 1 (length returned)))

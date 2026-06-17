@@ -1,0 +1,297 @@
+(in-package #:nshell.application)
+
+(defun %append-source-continuation (text line result)
+  (concatenate 'string
+               text
+               (if (nshell.domain.parsing:parse-diagnostic-kind-p
+                    result :trailing-continuation)
+                   " "
+                   "; ")
+               line))
+
+(defun %parse-source-line (source)
+  (nshell.domain.parsing:with-parsed-command-line-case (result ast source)
+    (:complete
+     result)
+    (:error
+     result)
+    (:incomplete
+     result)))
+
+(defun %source-substitution-fallback (source)
+  (list (format nil "(~a)" source)))
+
+(defun %collect-source-form (line remaining)
+  (let ((text line)
+        (tail remaining)
+        (result (%parse-source-line line)))
+    (loop while (and tail
+                     (or (nshell.domain.parsing:parse-diagnostic-kind-p
+                          result :unclosed-block)
+                         (nshell.domain.parsing:parse-diagnostic-kind-p
+                          result :trailing-continuation)))
+          do (setf text (%append-source-continuation text (pop tail) result)
+                   result (%parse-source-line text)))
+    (values text tail)))
+
+(defun %collect-source-lines (stream)
+  (loop for line = (read-line stream nil nil)
+        while line
+        collect line))
+
+(defun %expand-source-arg (arg &optional environment)
+  (let ((value (nshell.domain.parsing:arg-value arg)))
+    (if (or (null environment)
+            (nshell.domain.parsing:arg-quoted-p arg))
+        (list value)
+        (nshell.domain.expansion:expand-all value environment))))
+
+(defun %trim-command-substitution-output (output)
+  (let* ((text (or output ""))
+         (end (length text)))
+    (loop while (and (> end 0)
+                     (member (char text (1- end)) '(#\Newline #\Return)))
+          do (decf end))
+    (subseq text 0 end)))
+
+(defun %command-substitution-fields (output)
+  (let ((text (%trim-command-substitution-output output))
+        (fields nil)
+        (start 0))
+    (unless (string= text "")
+      (loop for newline = (position #\Newline text :start start)
+            do (push (subseq text start newline) fields)
+            if newline
+              do (setf start (1+ newline))
+            else
+              do (return)))
+    (nreverse fields)))
+
+(defun %command-substitution-end (value start)
+  (let ((depth 0)
+        (quote nil)
+        (escaped nil))
+    (loop for index from start below (length value)
+          for ch = (char value index)
+          do (cond
+               (escaped
+                (setf escaped nil))
+               ((char= ch #\\)
+                (setf escaped t))
+               (quote
+                (when (char= ch quote)
+                  (setf quote nil)))
+               ((or (char= ch #\') (char= ch #\"))
+                (setf quote ch))
+               ((char= ch #\()
+                (incf depth))
+               ((char= ch #\))
+                (decf depth)
+                (when (zerop depth)
+                  (return index)))))))
+
+(defun %append-command-substitution-char (parts ch)
+  (mapcar (lambda (part)
+            (concatenate 'string part (string ch)))
+          parts))
+
+(defun %append-command-substitution-fields (parts fields)
+  (let ((result nil)
+        (values (or fields '(""))))
+    (dolist (part parts (nreverse result))
+      (dolist (field values)
+        (push (concatenate 'string part field) result)))))
+
+(defun %execute-command-substitution-fields (context source)
+  (let ((trimmed (string-trim '(#\Space #\Tab #\Newline #\Return) source)))
+    (if (string= trimmed "")
+        nil
+        (nshell.domain.parsing:with-parsed-command-line-case (result ast trimmed)
+          (:complete
+           (if ast
+               (multiple-value-bind (output code)
+                   (execute-ast-in-context context ast)
+                 (declare (ignore code))
+                 (%command-substitution-fields output))
+               (%source-substitution-fallback source)))
+          (:error
+           (%source-substitution-fallback source))
+          (:incomplete
+           (%source-substitution-fallback source))))))
+
+(defun %expand-command-substitutions (context value)
+  (let ((parts (list ""))
+        (pos 0)
+        (len (length value)))
+    (labels ((emit-char (ch)
+               (setf parts (%append-command-substitution-char parts ch)))
+             (emit-fields (start end)
+               (setf parts
+                     (%append-command-substitution-fields
+                      parts
+                      (%execute-command-substitution-fields
+                       context
+                       (subseq value start end))))))
+      (loop while (< pos len)
+            for ch = (char value pos)
+            do (if (char= ch #\()
+                   (let ((end (%command-substitution-end value pos)))
+                     (if (and end (> end (1+ pos)))
+                         (progn
+                           (emit-fields (1+ pos) end)
+                           (setf pos (1+ end)))
+                         (progn
+                           (emit-char ch)
+                           (incf pos))))
+                   (progn
+                     (emit-char ch)
+                     (incf pos)))))
+    parts))
+
+(defun %expand-source-arg-in-context (context arg)
+  (let ((value (nshell.domain.parsing:arg-value arg)))
+    (if (nshell.domain.parsing:arg-quoted-p arg)
+        (list value)
+        (loop with environment = (shell-context-environment context)
+              for expanded in (%expand-command-substitutions context value)
+              append (nshell.domain.expansion:expand-all expanded environment)))))
+
+(defun %line-command-args (command-node &optional environment)
+  (loop for arg in (nshell.domain.parsing:command-node-args command-node)
+        append (%expand-source-arg arg environment)))
+
+(defun %line-command-args-in-context (context command-node)
+  (loop for arg in (nshell.domain.parsing:command-node-args command-node)
+        append (%expand-source-arg-in-context context arg)))
+
+(defparameter +source-definition-opening-keywords+
+  '("if" "for" "while" "switch" "begin" "function"))
+
+(defun %source-line-segments (line)
+  (multiple-value-bind (tokens)
+      (nshell.domain.parsing:tokenize line)
+    (let ((segments nil)
+          (segment-start 0))
+      (loop for token in tokens
+            do (when (member (nshell.domain.parsing:token-type token)
+                             '(:semicolon :ampersand)
+                             :test #'eq)
+                 (let ((segment (string-trim '(#\Space #\Tab)
+                                             (subseq line
+                                                     segment-start
+                                                     (nshell.domain.parsing:token-start token)))))
+                   (when (plusp (length segment))
+                     (push segment segments)))
+                 (setf segment-start (nshell.domain.parsing:token-end token)))
+            finally
+              (let ((segment (string-trim '(#\Space #\Tab)
+                                          (subseq line segment-start))))
+                (when (plusp (length segment))
+                  (push segment segments)))
+              (return (nreverse segments))))))
+
+(defun %function-start-p (line)
+  (multiple-value-bind (tokens)
+      (nshell.domain.parsing:tokenize line)
+    (let ((words nil))
+      (dolist (token tokens)
+        (let ((type (nshell.domain.parsing:token-type token)))
+          (when (member type '(:semicolon :ampersand :pipe :and :or)
+                        :test #'eq)
+            (return))
+          (when (eq type :word)
+            (push (nshell.domain.parsing:token-value token) words))))
+      (let ((words (nreverse words)))
+        (when (and (>= (length words) 2)
+                   (string= (first words) "function"))
+          (second words))))))
+
+(defun %source-definition-line-depth-delta (line)
+  (multiple-value-bind (tokens)
+      (nshell.domain.parsing:tokenize line)
+    (let ((expect-command t)
+          (delta 0))
+      (dolist (token tokens delta)
+        (let ((type (nshell.domain.parsing:token-type token))
+              (value (nshell.domain.parsing:token-value token)))
+          (cond
+            ((and expect-command (eq type :word))
+             (when (and (stringp value)
+                        (member value +source-definition-opening-keywords+
+                                :test #'string=))
+               (incf delta))
+             (when (and (stringp value)
+                        (string= value "end"))
+               (decf delta))
+             (setf expect-command nil))
+            ((member type '(:semicolon :and :or :ampersand :pipe))
+             (setf expect-command t))
+            ((eq type :redirect))
+            ((eq type :word)
+             (setf expect-command nil))))))))
+
+(defun %source-function-definition (context name line lines)
+  (let ((body nil)
+        (inline-body nil)
+        (closed nil)
+        (depth 1)
+        (inline-lines (rest (%source-line-segments line)))
+        (remaining lines))
+    (loop while inline-lines
+          for body-line = (pop inline-lines)
+          for line-delta = (%source-definition-line-depth-delta body-line)
+          do (if (and (= depth 1)
+                      (= line-delta -1))
+                 (progn
+                   (setf closed t)
+                   (return))
+                 (progn
+                   (push body-line body)
+                   (push body-line inline-body)
+                   (incf depth line-delta))))
+    (loop while (and (not closed)
+                     remaining)
+          for body-line = (pop remaining)
+          for line-delta = (%source-definition-line-depth-delta body-line)
+          do (if (and (= depth 1)
+                      (= line-delta -1))
+                 (progn
+                   (setf closed t)
+                   (return))
+                 (progn
+                   (push body-line body)
+                   (incf depth line-delta))))
+    (if closed
+        (let ((function-body (nreverse body))
+              (inline-body-lines (nreverse inline-body))
+              (tail (append inline-lines remaining)))
+          (setf (gethash name (shell-context-function-table context))
+                function-body)
+          (if inline-body-lines
+              (multiple-value-bind (chunk exit-code)
+                  (%source-lines context inline-body-lines)
+                (values tail chunk exit-code))
+              (values tail nil 0)))
+        (values nil (format nil "source: function ~a missing end~%" name) 2))))
+
+(defun %source-lines (context lines)
+  (let ((output nil)
+        (code 0)
+        (remaining lines))
+    (loop while remaining
+          for line = (pop remaining)
+          for function-name = (%function-start-p line)
+          do (if function-name
+                 (multiple-value-bind (tail chunk exit-code)
+                     (%source-function-definition context function-name line remaining)
+                   (setf remaining tail
+                         code exit-code)
+                   (when chunk (push chunk output)))
+                 (multiple-value-bind (source-form tail)
+                     (%collect-source-form line remaining)
+                   (setf remaining tail)
+                   (multiple-value-bind (chunk exit-code)
+                       (%execute-source-line context source-form)
+                     (when chunk (push chunk output))
+                     (setf code exit-code)))))
+    (values (apply #'concatenate 'string (nreverse output)) code)))

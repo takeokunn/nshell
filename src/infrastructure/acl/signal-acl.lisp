@@ -21,6 +21,26 @@
 (defun domain-signal->os (domain-signal)
   (nshell.domain.signals:signal-name domain-signal))
 
+(defun %signal-number (signal)
+  (cond
+    ((integerp signal) signal)
+    ((keywordp signal)
+     (ecase signal
+       (:sigint sb-unix:sigint)
+       (:sigterm sb-unix:sigterm)
+       (:sigtstp sb-unix:sigtstp)
+       (:sigcont sb-unix:sigcont)
+       (:sigchld sb-unix:sigchld)
+       (:sigwinch sb-unix:sigwinch)))
+    ((nshell.domain.signals:signal-p signal)
+     (%signal-number (nshell.domain.signals:signal-name signal)))
+    (t
+     (error "Unsupported signal designator: ~s" signal))))
+
+(defun kill-process (pid signal)
+  "Send SIGNAL to PID. Negative PID values target process groups."
+  (sb-posix:kill pid (%signal-number signal)))
+
 (defun shell-sigint-handler (signal info context)
   "Forward SIGINT to the foreground process group without killing the shell."
   (declare (ignore signal info context))

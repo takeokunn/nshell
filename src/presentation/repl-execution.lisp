@@ -1,0 +1,33 @@
+(in-package #:nshell.presentation)
+
+(defun execute-ast (ast)
+  (cond
+    ((nshell.domain.parsing:sequence-node-p ast)
+     (let* ((cmds (nshell.domain.parsing:sequence-node-commands ast))
+            (seps (nshell.domain.parsing:sequence-node-separators ast))
+            (code 0))
+       (loop for cmd in cmds
+             for index from 0
+             for sep = (and (< index (length seps))
+                            (nth index seps))
+             do (if (eq :amp sep)
+                    (%execute-background-ast cmd)
+                    (setf code (%update-status (or (execute-ast cmd) 0)))))
+        code))
+    ((nshell.domain.parsing:pipeline-node-p ast)
+     (%execute-foreground-ast-in-context ast))
+    ((nshell.domain.parsing:if-node-p ast)
+     (%execute-foreground-ast-in-context ast))
+    ((nshell.domain.parsing:for-node-p ast)
+     (%execute-foreground-ast-in-context ast))
+    ((nshell.domain.parsing:while-node-p ast)
+     (%execute-foreground-ast-in-context ast))
+    ((nshell.domain.parsing:case-node-p ast)
+     (%execute-foreground-ast-in-context ast))
+    ((nshell.domain.parsing:begin-end-node-p ast)
+     (%execute-foreground-ast-in-context ast))
+    ((nshell.domain.parsing:command-node-p ast)
+     (execute-command-node ast))
+    (t
+     (format t "nshell: cannot execute~%")
+     1)))

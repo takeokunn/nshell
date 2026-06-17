@@ -2,10 +2,24 @@
 ;;; fish-inspired: left prompt + right prompt with git/exit/time info
 (in-package #:nshell.domain.prompting)
 
-(defstruct (prompt-model (:constructor make-prompt-model (&key hostname cwd exit-code segments right-segments)))
+(defparameter *git-status-resolver*
+  (lambda (directory)
+    (declare (ignore directory))
+    (values nil nil))
+  "Function called with a directory and returning values BRANCH and DIRTY-P.")
+
+(defparameter *prompt-time-resolver*
+  (lambda ()
+    (multiple-value-bind (sec min hour) (get-decoded-time)
+      (declare (ignore sec))
+      (format nil "~2,'0d:~2,'0d" hour min)))
+  "Function returning the right-prompt time text, or NIL to omit it.")
+
+(defstruct (prompt-model (:constructor make-prompt-model (&key hostname cwd directory exit-code segments right-segments)))
   "Pure data model for rendering a shell prompt."
   (hostname "localhost" :type string :read-only t)
   (cwd "/" :type string :read-only t)
+  (directory nil :type (or null string) :read-only t)
   (exit-code 0 :type (or null integer) :read-only t)
   (segments nil :type list :read-only t)
   (right-segments nil :type list :read-only t))
@@ -20,6 +34,35 @@
 (defun prompt-exit-code (pm) (prompt-model-exit-code pm))
 (defun prompt-segments (pm) (prompt-model-segments pm))
 (defun prompt-right-segments (pm) (prompt-model-right-segments pm))
+
+(defun %prompt-directory (pm)
+  (or (prompt-model-directory pm)
+      (prompt-model-cwd pm)))
+
+(defun %git-status-segment (pm)
+  (multiple-value-bind (branch dirty-p)
+      (funcall *git-status-resolver* (%prompt-directory pm))
+    (when branch
+      (make-prompt-segment
+       (if dirty-p
+           (concatenate 'string branch "*")
+           branch)
+       :git))))
+
+(defun %prompt-time-segment ()
+  (let ((text (funcall *prompt-time-resolver*)))
+    (when text
+      (make-prompt-segment text :time))))
+
+(defun %render-right-segment (pm seg)
+  (case (prompt-segment-kind seg)
+    (:git
+     (let ((resolved (%git-status-segment pm)))
+       (when resolved
+         (cons (prompt-segment-text resolved)
+               (prompt-segment-kind resolved)))))
+    (t (cons (prompt-segment-text seg)
+             (prompt-segment-kind seg)))))
 
 (defun render-prompt-model (pm)
   "Convert a prompt model into a list of (text . kind) pairs for the left prompt."
@@ -44,10 +87,25 @@
   "Convert prompt model right segments to (text . kind) pairs."
   (let ((segs (prompt-model-right-segments pm)))
     (if segs
-        (mapcar (lambda (seg)
-                  (cons (prompt-segment-text seg) (prompt-segment-kind seg)))
-                segs)
-        ;; Default right prompt: show last exit code if non-zero
-        (let ((ec (prompt-model-exit-code pm)))
+        (remove nil (mapcar (lambda (seg)
+                              (%render-right-segment pm seg))
+                            segs))
+        (let ((result nil)
+              (git (%git-status-segment pm))
+              (ec (prompt-model-exit-code pm)))
+          (when git
+            (push (cons (prompt-segment-text git)
+                        (prompt-segment-kind git))
+                  result))
           (when (and ec (not (zerop ec)))
-            (list (cons (format nil "[~d]" ec) :exit-error)))))))
+            (when result
+              (push (cons " " :literal) result))
+            (push (cons (format nil "[~d]" ec) :exit-error) result))
+          (let ((time (%prompt-time-segment)))
+            (when time
+              (when result
+                (push (cons " " :literal) result))
+              (push (cons (prompt-segment-text time)
+                          (prompt-segment-kind time))
+                    result)))
+          (nreverse result)))))

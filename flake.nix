@@ -9,17 +9,32 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
+      sourceFor = pkgs: pkgs.lib.cleanSourceWith {
+        src = ./.;
+        filter = path: type:
+          (pkgs.lib.cleanSourceFilter path type)
+          && (let
+            name = builtins.baseNameOf path;
+          in
+            !(pkgs.lib.hasSuffix ".fasl" name
+              || pkgs.lib.hasSuffix ".cfasl" name
+              || pkgs.lib.hasSuffix ".dfsl" name
+              || pkgs.lib.hasSuffix ".ufasl" name
+              || pkgs.lib.hasSuffix ".core" name
+              || pkgs.lib.hasSuffix ".o" name));
+      };
     in
     {
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          src = sourceFor pkgs;
         in
         {
           default = pkgs.sbcl.buildASDFSystem {
             pname = "nshell";
             version = "0.1.0";
-            src = ./.;
+            src = src;
             systems = [ "nshell" ];
             lispLibs = [];
             buildScript = pkgs.writeText "build-nshell.lisp" ''
@@ -44,7 +59,7 @@
           test = pkgs.sbcl.buildASDFSystem {
             pname = "nshell-test";
             version = "0.1.0";
-            src = ./.;
+            src = src;
             systems = [ "nshell/test" ];
             lispLibs = [ pkgs.sbclPackages.fiveam ];
           };
@@ -59,6 +74,7 @@
 
       checks = forAllSystems (system: let
         pkgs = nixpkgs.legacyPackages.${system};
+        src = sourceFor pkgs;
         bin = "${self.packages.${system}.default}/bin/nshell";
       in {
         # Verify the default package compiles and builds successfully
@@ -68,7 +84,7 @@
         test = pkgs.sbcl.buildASDFSystem {
           pname = "nshell-test-check";
           version = "0.1.0";
-          src = ./.;
+          src = src;
           systems = [ "nshell/test" ];
           lispLibs = [ pkgs.sbclPackages.fiveam ];
           buildScript = pkgs.writeText "run-tests.lisp" ''

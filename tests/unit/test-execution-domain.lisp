@@ -67,12 +67,21 @@
     (nshell.domain.execution:job-state-transition job :stopped)
     (is (nshell.domain.execution:job-stopped-p job))
     (nshell.domain.execution:job-state-transition job :completed)
-    (is (nshell.domain.execution:job-completed-p job))))
+    (is (eq t (nshell.domain.execution:job-completed-p job)))))
+
+(test job-completed-p-recognizes-done
+  "Terminal done state is treated as completed."
+  (let* ((cmd (nshell.domain.execution:make-command "ls"))
+         (pipe (nshell.domain.execution:make-pipeline cmd))
+         (job (nshell.domain.execution:make-job 43 pipe)))
+    (nshell.domain.execution:job-state-transition job :done)
+    (is (eq t (nshell.domain.execution:job-completed-p job)))))
 
 (test job-state-validation
   "Valid states are recognized, invalid are not"
   (is (nshell.domain.execution:job-state-valid-p :running))
   (is (nshell.domain.execution:job-state-valid-p :created))
   (is (nshell.domain.execution:job-state-valid-p :stopped))
+  (is (nshell.domain.execution:job-state-valid-p :done))
   (is (not (nshell.domain.execution:job-state-valid-p :invalid)))
   (is (not (nshell.domain.execution:job-state-valid-p :zombie))))

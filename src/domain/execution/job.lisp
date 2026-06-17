@@ -24,4 +24,5 @@
   job)
 (defun job-running-p (job) (eq (job-state-kw job) :running))
 (defun job-stopped-p (job) (eq (job-state-kw job) :stopped))
-(defun job-completed-p (job) (eq (job-state-kw job) :completed))
+(defun job-completed-p (job)
+  (not (null (member (job-state-kw job) '(:completed :done)))))

@@ -7,17 +7,13 @@
 (in-suite integration-tests)
 
 (test parse-and-execute-roundtrip
-  (let ((result (nshell.domain.parsing:parse-command-line "echo hello")))
-    (is (nshell.domain.parsing:parse-complete-p result))
-    (let ((ast (nshell.domain.parsing:parse-result-ast result)))
-      (is (nshell.domain.parsing:command-node-p ast)))))
+  (with-complete-ast (ast "echo hello")
+    (is (nshell.domain.parsing:command-node-p ast))))
 
 (test pipeline-parsing
-  (let ((result (nshell.domain.parsing:parse-command-line "ls | grep foo")))
-    (is (nshell.domain.parsing:parse-complete-p result))
-    (let ((ast (nshell.domain.parsing:parse-result-ast result)))
-      (is (nshell.domain.parsing:pipeline-node-p ast))
-      (is (= 2 (length (nshell.domain.parsing:pipeline-node-commands ast)))))))
+  (with-complete-ast (ast "ls | grep foo")
+    (is (nshell.domain.parsing:pipeline-node-p ast))
+    (is (= 2 (length (nshell.domain.parsing:pipeline-node-commands ast))))))
 
 (test history-search-and-persistence
   (let ((h (nshell.domain.history:make-command-history :max-entries 100)))
@@ -45,6 +41,37 @@
     (let ((entry (nshell.domain.completion:kb-query kb "git")))
       (is (not (null entry))))))
 
+(test path-command-completion-uses-directory-adapter-integration
+  (let* ((root (merge-pathnames (format nil "nshell-path-completion-~a/" (gensym))
+                                (uiop:temporary-directory)))
+         (command-path (merge-pathnames "nshell-cmd" root))
+         (old-directory-files-fn nshell.domain.completion:*path-command-directory-files-fn*)
+         (old-executable-p-fn nshell.domain.completion:*path-command-executable-p-fn*))
+    (unwind-protect
+         (progn
+           (ensure-directories-exist root)
+           (with-open-file (stream command-path
+                                   :direction :output
+                                   :if-exists :supersede
+                                   :if-does-not-exist :create)
+             (write-line "echo ok" stream))
+           (setf nshell.domain.completion:*path-command-directory-files-fn*
+                 (lambda (directory) (uiop:directory-files directory)))
+           (setf nshell.domain.completion:*path-command-executable-p-fn*
+                 (lambda (entry) (probe-file entry)))
+           (let ((texts (completion-texts
+                         (nshell.domain.completion:complete
+                          (nshell.domain.completion:make-knowledge-base)
+                          "nshell-c"
+                          :path (namestring root)))))
+             (is (member "nshell-cmd" texts :test #'string=))))
+      (setf nshell.domain.completion:*path-command-directory-files-fn* old-directory-files-fn)
+      (setf nshell.domain.completion:*path-command-executable-p-fn* old-executable-p-fn)
+      (handler-case
+          (when (probe-file root)
+            (uiop:delete-directory-tree root :validate t))
+        (error ())))))
+
 (test cps-trampoline-execution
   (let ((results '()))
     (nshell.presentation:trampoline
@@ -60,6 +87,7 @@
 (test tokenizer-parser-ast-roundtrip
   (let ((inputs '("ls" "echo hello" "git status" "ls -la | grep foo")))
     (dolist (input inputs)
-      (let ((result (nshell.domain.parsing:parse-command-line input)))
+      (with-complete-command-line (result ast input)
+        (declare (ignore ast))
         (is (nshell.domain.parsing:parse-complete-p result))
         (is (not (null (nshell.domain.parsing:parse-result-ast result))))))))

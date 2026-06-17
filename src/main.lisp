@@ -7,18 +7,21 @@
 
 (defun main ()
   "Entry point for the nshell binary."
-  (if (tty-p)
-      (progn
-        (format t "nshell v0.1.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
-                (lisp-implementation-version))
-        (handler-case
-            (nshell.presentation:run-repl)
-          (error (e)
-            (format *error-output* "Fatal error: ~a~%" e)
-            (sb-ext:exit :code 1))))
-      (handler-case
-          (nshell.presentation::run-repl-batch)
-        (error (e)
-          (format *error-output* "Fatal error: ~a~%" e)
-          (sb-ext:exit :code 1))))
-  (sb-ext:quit :unix-status 0))
+  (let ((exit-code
+          (if (tty-p)
+              (progn
+                (format t "nshell v0.1.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
+                        (lisp-implementation-version))
+                (handler-case
+                    (progn
+                      (nshell.presentation:run-repl)
+                      0)
+                  (error (e)
+                    (format *error-output* "Fatal error: ~a~%" e)
+                    (sb-ext:exit :code 1))))
+              (handler-case
+                  (nshell.presentation::run-repl-batch)
+                (error (e)
+                  (format *error-output* "Fatal error: ~a~%" e)
+                  (sb-ext:exit :code 1))))))
+    (sb-ext:quit :unix-status (or exit-code 0))))

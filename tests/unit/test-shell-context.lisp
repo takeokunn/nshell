@@ -1,0 +1,46 @@
+(in-package #:nshell/test)
+
+(def-suite shell-context-tests
+  :description "Application shell context unit tests"
+  :in nshell-tests)
+
+(in-suite shell-context-tests)
+
+(test shell-context-constructs-with-all-dependencies
+  "MAKE-SHELL-CONTEXT stores each dependency in an accessor-readable slot."
+  (let ((context (make-test-shell-context
+                  :filesystem-fns (list :list-dir (lambda (dir) (declare (ignore dir)) '("a" "b"))
+                                        :stat (lambda (path) (declare (ignore path)) t)
+                                        :cwd (lambda () #p"/tmp/")
+                                        :chdir (lambda (path) (declare (ignore path)) t))
+                  :process-fns (list :spawn (lambda (&rest args) (declare (ignore args)) :spawned)
+                                     :wait (lambda (&rest args) (declare (ignore args)) :waited)
+                                     :signal (lambda (&rest args) (declare (ignore args)) :signaled))
+                  :terminal-fns (list :get-size (lambda () (values 80 24))
+                                      :raw-mode (lambda () t)
+                                      :restore-mode (lambda () t)))))
+    (is (nshell.application:shell-context-p context))
+    (is (typep (nshell.application:shell-context-history context)
+               'nshell.domain.history:command-history))
+    (is (nshell.domain.configuration:config-p
+         (nshell.application:shell-context-config context)))
+    (is (not (null (nshell.application:shell-context-knowledge-base context))))
+    (is (nshell.domain.environment:environment-p
+         (nshell.application:shell-context-environment context)))
+    (is (not (null (nshell.application:shell-context-dispatcher context))))
+    (is (not (null (nshell.application:shell-context-job-monitor context))))
+    (is (hash-table-p (nshell.application:shell-context-alias-table context)))
+    (is (hash-table-p (nshell.application:shell-context-abbreviation-table context)))
+    (is (eq :cps (nshell.application:shell-context-execution-strategy context)))))
+
+(test shell-context-supports-fake-adapters
+  "Adapter plists can be replaced with test fakes."
+  (let* ((context (make-test-shell-context))
+         (filesystem-fns (nshell.application:shell-context-filesystem-fns context))
+         (process-fns (nshell.application:shell-context-process-fns context))
+         (terminal-fns (nshell.application:shell-context-terminal-fns context)))
+    (is (equal '("a" "b") (funcall (getf filesystem-fns :list-dir) #p"/tmp/")))
+    (is (eq :spawned (funcall (getf process-fns :spawn) "echo" '("ok"))))
+    (multiple-value-bind (columns rows) (funcall (getf terminal-fns :get-size))
+      (is (= 80 columns))
+      (is (= 24 rows)))))

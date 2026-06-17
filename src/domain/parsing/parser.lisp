@@ -1,17 +1,161 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (parse-result (:constructor make-parse-result (ast &optional errors incomplete)))
-  (ast nil :type (or null ast-node))
-  (errors nil :type list)
-  (incomplete nil :type boolean))
+(defstruct (%token-reduction-state
+            (:constructor %make-token-reduction-state))
+  (all-cmds '() :type list)
+  (current-args '() :type list)
+  (current-cmd nil)
+  (current-cmd-token nil)
+  (pending-redirect-token nil)
+  (pending-sep nil)
+  (pending-sep-token nil)
+  (errors '() :type list))
 
-(defun parse-complete-p (result)
-  (and (parse-result-ast result)
-       (null (parse-result-errors result))
-       (not (parse-result-incomplete result))))
+(defun %record-missing-redirect-target (state)
+  (let ((pending-redirect-token (%token-reduction-state-pending-redirect-token state)))
+    (when pending-redirect-token
+      (push (%token-diagnostic
+             :missing-redirection-target
+             (format nil "Expected target after '~a'"
+                     (token-value pending-redirect-token))
+             pending-redirect-token)
+            (%token-reduction-state-errors state))
+      (setf (%token-reduction-state-pending-redirect-token state) nil))))
 
-(defun parse-errors (result)
-  (parse-result-errors result))
+(defun %flush-token-reduction-command (state)
+  (when (%token-reduction-state-current-cmd state)
+    (%record-missing-redirect-target state)
+    (push (list (make-command-node
+                 (%token-reduction-state-current-cmd state)
+                 (nreverse (%token-reduction-state-current-args state))
+                 (when (%token-reduction-state-current-cmd-token state)
+                   (list (token-start (%token-reduction-state-current-cmd-token state))
+                         (token-end (%token-reduction-state-current-cmd-token state)))))
+                (%token-reduction-state-pending-sep state)
+                (%token-reduction-state-pending-sep-token state))
+          (%token-reduction-state-all-cmds state))
+    (setf (%token-reduction-state-current-cmd state) nil
+          (%token-reduction-state-current-cmd-token state) nil
+          (%token-reduction-state-current-args state) '()
+          (%token-reduction-state-pending-redirect-token state) nil
+          (%token-reduction-state-pending-sep state) nil
+          (%token-reduction-state-pending-sep-token state) nil)))
+
+(defun %record-token-reduction-separator (state separator token)
+  (if (%token-reduction-state-current-cmd state)
+      (progn
+        (%record-missing-redirect-target state)
+        (setf (%token-reduction-state-pending-sep state) separator
+              (%token-reduction-state-pending-sep-token state) token)
+        (%flush-token-reduction-command state))
+      (push (%token-diagnostic
+             :missing-command
+             (format nil "Expected command before '~a'"
+                     (%separator-text separator))
+             token)
+            (%token-reduction-state-errors state))))
+
+(defun %reduce-token-stream (tokens)
+  (let ((state (%make-token-reduction-state)))
+    (dolist (tok tokens)
+      (case (token-type tok)
+        (:word
+         (if (%token-reduction-state-current-cmd state)
+             (progn
+               (push (if (token-quoted-p tok)
+                         (cons (token-value tok) t)
+                         (token-value tok))
+                     (%token-reduction-state-current-args state))
+               (setf (%token-reduction-state-pending-redirect-token state) nil))
+             (setf (%token-reduction-state-current-cmd state) (token-value tok)
+                   (%token-reduction-state-current-cmd-token state) tok)))
+        (:redirect
+         (if (%token-reduction-state-current-cmd state)
+             (progn
+               (%record-missing-redirect-target state)
+               (push (cons (token-value tok) nil)
+                     (%token-reduction-state-current-args state))
+               (setf (%token-reduction-state-pending-redirect-token state) tok))
+             (push (%token-diagnostic
+                    :missing-command
+                    (format nil "Expected command before '~a'" (token-value tok))
+                    tok)
+                   (%token-reduction-state-errors state))))
+        (:error
+         (push (cond
+                 ((string= "\\" (token-value tok))
+                  (%token-diagnostic
+                   :trailing-escape
+                   "Trailing escape requires continuation"
+                   tok))
+                 ((and (>= (length (token-value tok)) 2)
+                       (string= "<(" (subseq (token-value tok) 0 2)))
+                  (%token-diagnostic
+                   :unterminated-process-substitution
+                   "Unterminated process substitution"
+                   tok))
+                 (t
+                  (%token-diagnostic
+                   :unterminated-quote
+                   "Unterminated quoted string"
+                   tok)))
+               (%token-reduction-state-errors state)))
+        (t
+         (let ((separator (%separator-from-token-type (token-type tok))))
+           (if separator
+               (%record-token-reduction-separator state separator tok)
+               (push (%token-diagnostic
+                      :unexpected-token
+                      (format nil "Unexpected token: ~a" (token-value tok))
+                      tok)
+                     (%token-reduction-state-errors state)))))))
+    (%flush-token-reduction-command state)
+    (values (nreverse (%token-reduction-state-all-cmds state))
+            (nreverse (%token-reduction-state-errors state)))))
+
+(defun %parse-structural-diagnostics (cmds last-sep last-sep-token input-length)
+  (let ((diagnostics nil)
+        (structural-incomplete nil))
+    (when (%continuation-separator-p last-sep)
+      (setf structural-incomplete t)
+      (push (if last-sep-token
+                (%token-diagnostic
+                 :trailing-continuation
+                 (format nil "Expected command after '~a'"
+                         (%separator-text last-sep))
+                 last-sep-token)
+                (make-parse-diagnostic
+                 :trailing-continuation
+                 "Expected command after continuation operator"
+                 input-length
+                 input-length))
+            diagnostics))
+    (when (%unclosed-control-flow-p cmds)
+      (setf structural-incomplete t)
+      (push (make-parse-diagnostic
+             :unclosed-block
+             "Expected 'end' to close control-flow block"
+             input-length
+             input-length)
+            diagnostics))
+    (dolist (diagnostic (%unexpected-control-flow-diagnostics cmds input-length))
+      (push diagnostic diagnostics))
+    (values structural-incomplete (nreverse diagnostics))))
+
+(defun parse-tokens (tokens incomplete &key (input-length 0))
+  (multiple-value-bind (cmd-list errors)
+      (%reduce-token-stream tokens)
+    (let* ((cmds (mapcar #'first cmd-list))
+           (separators (mapcar #'second cmd-list))
+           (separator-tokens (mapcar #'third cmd-list))
+           (last-sep (car (last separators)))
+           (last-sep-token (car (last separator-tokens)))
+           (ast (%build-ast-from-command-list cmd-list)))
+      (multiple-value-bind (structural-incomplete structural-diagnostics)
+          (%parse-structural-diagnostics cmds last-sep last-sep-token input-length)
+        (make-parse-result (group-control-flow ast)
+                           (nconc (nreverse errors) structural-diagnostics)
+                           (or incomplete structural-incomplete))))))
 
 (defun parse-command-line (input &key (cursor-pos nil))
   (multiple-value-bind (tokens cursor-token incomplete)
@@ -19,82 +163,4 @@
     (declare (ignore cursor-token))
     (if (null tokens)
         (make-parse-result nil nil incomplete)
-        (parse-tokens tokens incomplete))))
-
-(defun parse-tokens (tokens incomplete)
-  (let ((all-cmds '())             ; flat list of (cmd . next-separator) pairs
-        (current-args '())
-        (current-cmd nil)
-        (pending-sep nil)          ; separator FOLLOWING the current command
-        (errors '()))
-    (labels ((flush-command ()
-               (when current-cmd
-                 (push (cons (make-command-node current-cmd (nreverse current-args)) pending-sep)
-                       all-cmds)
-                 (setf current-cmd nil current-args nil pending-sep nil))))
-      (dolist (tok tokens)
-        (case (token-type tok)
-          (:word
-           (if current-cmd
-               (push (if (token-quoted-p tok)
-                         (cons (token-value tok) t)
-                         (token-value tok))
-                     current-args)
-               (setf current-cmd (token-value tok))))
-          (:pipe (setf pending-sep :pipe) (flush-command))
-          (:semicolon (setf pending-sep :semi) (flush-command))
-          (:ampersand (setf pending-sep :amp) (flush-command))
-          (:and (setf pending-sep :and) (flush-command))
-          (:or (setf pending-sep :or) (flush-command))
-          (:redirect (push (cons (token-value tok) nil) current-args))
-          (:error (push (format nil "Parse error near: ~a" (token-value tok)) errors))
-          (t (push (format nil "Unexpected token: ~a" (token-value tok)) errors))))
-      (flush-command))
-    (let* ((cmd-list (nreverse all-cmds))
-           (cmds (mapcar #'car cmd-list))
-           (separators (mapcar #'cdr cmd-list))
-           (last-sep (car (last separators)))
-           (ast (cond
-                  ((null cmds) nil)
-                  ((= (length cmds) 1)
-                   ;; Trailing & for single command → preserve as sequence
-                   (if (eq :amp (first separators))
-                       (make-sequence-node cmds '(:amp))
-                       (first cmds)))
-                  ;; All pipe: single pipeline, but check for trailing &
-                  ((and (every (lambda (s) (eq :pipe s)) (butlast separators))
-                        (eq :amp last-sep))
-                   (make-sequence-node (list (make-pipeline-node cmds)) '(:amp)))
-                  ;; All pipe: single pipeline (no trailing &)
-                  ((every (lambda (s) (eq :pipe s)) (butlast separators))
-                   (make-pipeline-node cmds))
-                  ;; All non-pipe with trailing & → wrap in sequence
-                  ((and (every (lambda (s) (not (eq :pipe s))) (butlast separators))
-                        (eq :amp last-sep))
-                   (make-sequence-node cmds separators))
-                  ;; All non-pipe: flat sequence
-                  ((every (lambda (s) (not (eq :pipe s))) (butlast separators))
-                   (make-sequence-node cmds (butlast separators)))
-                  ;; All non-pipe: flat sequence
-                  ((every (lambda (s) (not (eq :pipe s))) (butlast separators))
-                   (make-sequence-node cmds (butlast separators)))
-                  ;; Mixed: group consecutive pipe-connected commands into pipeline-nodes
-                  (t
-                   (let ((seq-cmds nil) (seq-seps nil) (pipe-group nil))
-                     (labels ((flush-pipe-group ()
-                                (let ((n (length pipe-group)))
-                                  (when (> n 0)
-                                    (push (if (= n 1) (first pipe-group)
-                                              (make-pipeline-node (nreverse pipe-group)))
-                                          seq-cmds)
-                                    (setf pipe-group nil)))))
-                       (loop for cmd in cmds
-                             for i from 0
-                             for sep = (nth i separators)
-                             do (push cmd pipe-group)
-                                (when (and sep (not (eq sep :pipe)))
-                                  (flush-pipe-group)
-                                  (push sep seq-seps)))
-                       (flush-pipe-group))
-                     (make-sequence-node (nreverse seq-cmds) (nreverse seq-seps)))))))
-      (make-parse-result ast errors incomplete))))
+        (parse-tokens tokens incomplete :input-length (length input)))))

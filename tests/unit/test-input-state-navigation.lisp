@@ -1,0 +1,161 @@
+(in-package #:nshell/test)
+
+(in-suite input-state-tests)
+
+(test input-state-cursor-moves-with-arrow-keys-within-bounds
+  (let ((state (input-state :buffer "abc" :cursor-pos 1)))
+    (with-expected-input-state-reduction (left-state left-output)
+        state
+        (reduce-once state :left)
+        :redraw
+        (:cursor-pos 0)
+      (with-reduced-input-state (bounded-left-state) (reduce-once left-state :left)
+        (is-input-state bounded-left-state :cursor-pos 0)))
+    (with-expected-input-state-reduction (right-state right-output)
+        state
+        (reduce-once state :right)
+        :redraw
+        (:cursor-pos 2)
+      (with-reduced-input-state (end-state) (reduce-once right-state :end)
+        (is-input-state end-state :cursor-pos 3)
+        (with-reduced-input-state (bounded-right-state) (reduce-once end-state :right)
+          (is-input-state bounded-right-state :cursor-pos 3))))))
+
+(test input-state-cursor-moves-clear-autosuggestion
+  (let ((state (input-state
+                :buffer "git status"
+                :cursor-pos 10
+                :suggestion " && apt upgrade")))
+    (with-expected-input-state-reduction (left-state left-output)
+        state
+        (reduce-once state :left)
+        :redraw
+        (:buffer "git status" :cursor-pos 9 :suggestion nil)
+      (with-expected-input-state-reduction (home-state home-output)
+          state
+          (reduce-once state :home)
+          :redraw
+          (:buffer "git status" :cursor-pos 0 :suggestion nil)))
+    (with-expected-input-state-reduction (ctrl-b-state ctrl-b-output)
+        state
+        (reduce-once state :ctrl-b)
+        :redraw
+        (:buffer "git status" :cursor-pos 9 :suggestion nil))
+    (with-expected-input-state-reduction (ctrl-a-state ctrl-a-output)
+        state
+        (reduce-once state :ctrl-a)
+        :redraw
+        (:buffer "git status" :cursor-pos 0 :suggestion nil))))
+
+(test input-state-right-arrow-before-eol-clears-autosuggestion
+  (let ((state (input-state
+                :buffer "git status"
+                :cursor-pos 3
+                :suggestion " --short")))
+    (with-expected-input-state-reduction (right-state right-output)
+        state
+        (reduce-once state :right)
+        :redraw
+        (:buffer "git status" :cursor-pos 4 :suggestion nil))))
+
+(test input-state-modified-arrows-move-by-word-and-handle-mouse-redraw
+  (let ((state (input-state
+                :buffer "git checkout main"
+                :cursor-pos 17)))
+    (with-expected-input-state-reduction (main-state main-output)
+        state
+        (reduce-once state :ctrl-left)
+        :redraw
+        (:cursor-pos 13)
+      (with-reduced-input-state (checkout-state) (reduce-once main-state :alt-left)
+        (is-input-state checkout-state :cursor-pos 4))))
+  (let ((state (input-state
+                :buffer "git checkout main"
+                :cursor-pos 0)))
+    (with-expected-input-state-reduction (git-state git-output)
+        state
+        (reduce-once state :alt-right)
+        :redraw
+        (:cursor-pos 4)
+      (with-reduced-input-state (checkout-state) (reduce-once git-state :ctrl-right)
+        (is-input-state checkout-state :cursor-pos 13))))
+  (let ((state (input-state
+                :buffer "abc"
+                :cursor-pos 2)))
+    (with-reduced-input-state (mouse-state mouse-output)
+        (reduce-once state :mouse nil 0
+                     '(:protocol :sgr :button 0 :column 2 :row 1))
+      (is-input-state mouse-state :buffer "abc" :cursor-pos 2)
+      (is (eq :redraw mouse-output)))))
+
+(test input-state-word-navigation-treats-escaped-space-as-token-content
+  (let ((state (input-state
+                :buffer "cat my\\ file.txt next"
+                :cursor-pos 4)))
+    (with-expected-input-state-reduction (right-state right-output)
+        state
+        (reduce-once state :alt-right)
+        :redraw
+        (:cursor-pos 17)
+      (with-reduced-input-state (left-state left-output) (reduce-once right-state :alt-left)
+        (is-input-state left-state :cursor-pos 4)
+        (is (eq :redraw left-output)))))
+  (let ((state (input-state
+                :buffer "cat my\\ file.txt next"
+                :cursor-pos 8)))
+    (with-expected-input-state-reduction (right-state right-output)
+        state
+        (reduce-once state :alt-right)
+        :redraw
+        (:cursor-pos 17))))
+
+(test input-state-word-navigation-treats-quoted-space-as-token-content
+  (let ((state (input-state
+                :buffer "echo \"hello world\" tail"
+                :cursor-pos 5)))
+    (with-expected-input-state-reduction (right-state right-output)
+        state
+        (reduce-once state :ctrl-right)
+        :redraw
+        (:cursor-pos 19)
+      (with-reduced-input-state (left-state left-output) (reduce-once right-state :ctrl-left)
+        (is-input-state left-state :cursor-pos 5)
+        (is (eq :redraw left-output)))))
+  (let ((state (input-state
+                :buffer "echo \"hello world\" tail"
+                :cursor-pos 8)))
+    (with-expected-input-state-reduction (right-state right-output)
+        state
+        (reduce-once state :ctrl-right)
+        :redraw
+        (:cursor-pos 19))))
+
+(test input-state-word-navigation-treats-shell-operators-as-boundaries
+  (let ((state (input-state
+                :buffer "echo one|two"
+                :cursor-pos 5)))
+    (with-expected-input-state-reduction (two-start-state two-start-output)
+        state
+        (reduce-once state :alt-right)
+        :redraw
+        (:cursor-pos 9)
+      (with-reduced-input-state (one-start-state one-start-output)
+          (reduce-once two-start-state :alt-left)
+        (is-input-state one-start-state :cursor-pos 5)
+        (is (eq :redraw one-start-output))))))
+
+(test input-state-word-navigation-clears-visible-suggestion-when-moving
+  (let ((state (input-state
+                :buffer "git checkout main"
+                :cursor-pos 0
+                :suggestion " --branch")))
+    (with-expected-input-state-reduction (alt-right-state alt-right-output)
+        state
+        (reduce-once state :alt-right)
+        :redraw
+        (:buffer "git checkout main" :cursor-pos 4 :suggestion nil))
+    (with-expected-input-state-reduction (ctrl-right-state ctrl-right-output)
+        state
+        (reduce-once state :ctrl-right)
+        :redraw
+        (:buffer "git checkout main" :cursor-pos 4 :suggestion nil))))

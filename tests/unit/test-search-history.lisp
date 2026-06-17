@@ -1,0 +1,192 @@
+(in-package #:nshell/test)
+
+(def-suite search-history-service-tests
+  :description "Application history-search service tests"
+  :in nshell-tests)
+
+(in-suite search-history-service-tests)
+
+(test history-suggestion-returns-suffix-and-publishes-completion-event
+  "Suggestions return only the completion suffix for the newest prefix match."
+  (with-history (history "git status" "git stash" "echo done")
+    (let ((dispatcher (nshell.application:make-event-dispatcher))
+          (events nil))
+      (nshell.application:subscribe dispatcher :completion-triggered
+                                    (lambda (event)
+                                      (push (nshell.domain.events:event-type event) events)))
+      (is (string= " stash"
+                   (nshell.application:history-suggestion history "git" dispatcher)))
+      (is (null (nshell.application:drain-events dispatcher)))
+      (is (equal '(:completion-triggered) (nreverse events))))))
+
+(test history-suggestion-returns-nil-without-match
+  "Suggestions are NIL when no command has the requested prefix."
+  (with-history (history "git status" "echo done")
+    (is (null (nshell.application:history-suggestion history "make")))))
+
+(test history-suggestion-returns-nil-for-exact-match
+  "Exact history matches should not produce a zero-length suggestion."
+  (with-history (history "git status" "echo done")
+    (is (null (nshell.application:history-suggestion history "git status")))))
+
+(test history-suggestion-prefers-successful-match-over-newer-failure
+  "Autosuggestion should not prefer a recent failed typo over an older success."
+  (let ((history (nshell.domain.history:make-command-history)))
+    (nshell.domain.history:history-add history "git status" 0)
+    (nshell.domain.history:history-add history "git stahs" 1)
+    (is (string= "tus"
+                 (nshell.application:history-suggestion history "git sta")))))
+
+(test history-suggestion-falls-back-to-failed-match
+  "Failed entries remain suggestible when no non-failing match exists."
+  (let ((history (nshell.domain.history:make-command-history)))
+    (nshell.domain.history:history-add history "git stahs" 1)
+    (is (string= "hs"
+                 (nshell.application:history-suggestion history "git sta")))))
+
+(test history-suggestion-uses-continuation-line-prefix
+  "Autosuggestion can complete the current line from a multiline history entry."
+  (with-history (history "echo setup
+git status --short"
+                         "printf 'not a prefix git'")
+    (is (string= "atus --short"
+                 (nshell.application:history-suggestion history "git st")))))
+
+(test history-suggestion-does-not-return-prefix-before-continuation-line
+  "Continuation-line suggestions expose only the matching line suffix."
+  (with-history (history "echo setup
+git status")
+    (is (string= " status"
+                 (nshell.application:history-suggestion history "git")))))
+
+(test history-suggestion-returns-nil-for-exact-continuation-line-match
+  "Exact continuation-line matches should not produce a zero-length suggestion."
+  (with-history (history "echo setup
+git status")
+    (is (null (nshell.application:history-suggestion history "git status")))))
+
+(test history-suggestion-ignores-blank-input
+  "Empty prompts should not ghost the newest command from history."
+  (with-history (history "git status" "echo done")
+    (let ((dispatcher (nshell.application:make-event-dispatcher))
+          (events nil))
+      (nshell.application:subscribe dispatcher :completion-triggered
+                                    (lambda (event)
+                                      (push (nshell.domain.events:event-type event) events)))
+      (is (null (nshell.application:history-suggestion history "" dispatcher)))
+      (is (null (nshell.application:history-suggestion history "   " dispatcher)))
+      (is (null (nshell.application:history-suggestion history "|" dispatcher)))
+      (is (null (nshell.application:history-suggestion history "&&" dispatcher)))
+      (is (null events)))))
+
+(test search-history-use-case-delegates-mode-and-publishes-event
+  "The search use case supports domain search modes and emits a search event."
+  (with-history (history "git status" "make test" "grep status log")
+    (let ((dispatcher (nshell.application:make-event-dispatcher))
+          (events nil))
+      (nshell.application:subscribe dispatcher :history-searched
+                                    (lambda (event)
+                                      (push (nshell.domain.events:event-type event) events)))
+      (let ((results (nshell.application:search-history-use-case
+                      history "status" :contains dispatcher)))
+        (is (= 2 (length results)))
+        (let ((matching 0))
+          (dolist (entry results)
+            (when (search "status" (nshell.domain.history:entry-text entry))
+              (incf matching)))
+          (is (= 2 matching))))
+      (is (null (nshell.application:drain-events dispatcher)))
+      (is (equal '(:history-searched) (nreverse events))))))
+
+(test pbt-history-suggestion-prefers-successful-prefix-match
+  "Generated prefixes choose a non-failing candidate before a newer failure."
+  (for-all-property (:trials 50)
+      ((prefix (gen-shell-word :min-length 1 :max-length 8))
+       (success-tail (gen-shell-word :min-length 1 :max-length 8))
+       (failure-tail (gen-shell-word :min-length 1 :max-length 8)))
+    (let ((history (nshell.domain.history:make-command-history)))
+      (nshell.domain.history:history-add
+       history
+       (concatenate 'string prefix success-tail)
+       0)
+      (nshell.domain.history:history-add
+       history
+       (concatenate 'string prefix failure-tail)
+       1)
+      (is (string= success-tail
+                   (nshell.application:history-suggestion history prefix))
+          "History suggestion should choose generated successful tail ~s over failed tail ~s for prefix ~s"
+          success-tail failure-tail prefix))))
+
+(test pbt-history-suggestion-returns-continuation-line-suffix
+  "Generated continuation-line prefixes return only the remaining current-line text."
+  (for-all-property (:trials 50)
+      ((prefix (gen-shell-word :min-length 1 :max-length 8))
+       (tail (gen-shell-word :min-length 1 :max-length 8)))
+    (let ((history (nshell.domain.history:make-command-history)))
+      (nshell.domain.history:history-add
+       history
+       (format nil " setup~%~a~a" prefix tail)
+       0)
+      (is (string= tail
+                   (nshell.application:history-suggestion history prefix))
+          "Continuation-line suggestion should return tail ~s for prefix ~s"
+          tail prefix))))
+
+(test interactive-history-search-prefers-line-prefix-before-contains
+  "Interactive reverse search ranks command-line starts before incidental substrings."
+  (with-history (history "echo setup
+git status"
+                         "printf 'not a prefix git'"
+                         "git push")
+    (let ((dispatcher (nshell.application:make-event-dispatcher))
+          (events nil))
+      (nshell.application:subscribe dispatcher :history-searched
+                                    (lambda (event)
+                                      (push (nshell.domain.events:event-type event) events)))
+      (let ((results (nshell.application:interactive-history-search-use-case
+                      history "git" dispatcher)))
+        (is (equal '("git push"
+                     "echo setup
+git status"
+                     "printf 'not a prefix git'")
+                   (history-result-texts results))))
+      (is (null (nshell.application:drain-events dispatcher)))
+      (is (equal '(:history-searched) (nreverse events))))))
+
+(test interactive-history-search-ignores-blank-query
+  "Interactive reverse search should not preselect history before the user types."
+  (with-history (history "git status" "docker ps")
+    (let ((dispatcher (nshell.application:make-event-dispatcher))
+          (events nil))
+      (nshell.application:subscribe dispatcher :history-searched
+                                    (lambda (event)
+                                      (push (nshell.domain.events:event-type event) events)))
+      (is (null (nshell.application:interactive-history-search-use-case
+                 history "" dispatcher)))
+      (is (null (nshell.application:interactive-history-search-use-case
+                 history "|" dispatcher)))
+      (is (null (nshell.application:interactive-history-search-use-case
+                 history "&&" dispatcher)))
+      (is (null (nshell.application:drain-events dispatcher)))
+      (is (equal '(:history-searched :history-searched :history-searched)
+                 (nreverse events))))))
+
+(test pbt-interactive-history-search-ignores-operator-only-query
+  "Generated shell-operator-only input should behave like blank input."
+  (with-history (history "git status" "docker ps")
+    (let ((dispatcher (nshell.application:make-event-dispatcher))
+          (events nil))
+      (nshell.application:subscribe dispatcher :history-searched
+                                    (lambda (event)
+                                      (push (nshell.domain.events:event-type event) events)))
+      (for-all-property (:trials 50)
+          ((query (gen-shell-operator-only-input :min-length 1 :max-length 8)))
+        (is (null (nshell.application:interactive-history-search-use-case
+                   history query dispatcher))
+            "Interactive reverse search should ignore generated operator-only query ~s"
+            query))
+      (is (null (nshell.application:drain-events dispatcher)))
+      (is (equal 50 (length events)))
+      (is (every (lambda (event) (eql event :history-searched))
+                 events)))))

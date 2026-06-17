@@ -1,0 +1,140 @@
+(in-package #:nshell/test)
+
+(defun make-test-builtins-context (&key external-runner external-capture-runner)
+  (let ((files (make-hash-table :test #'equal))
+        (dirs (make-hash-table :test #'equal)))
+    (setf (gethash "/bin/echo" files) t
+          (gethash "/tmp/file.txt" files) t
+          (gethash "/tmp" dirs) t)
+    (make-test-shell-context
+     :environment (nshell.domain.environment:env-set
+                   (nshell.domain.environment:make-default-environment)
+                   "PATH" "/bin:/usr/bin" t)
+     :filesystem-fns
+     (list :list-dir (lambda (dir) (declare (ignore dir)) nil)
+           :stat (lambda (path)
+                   (or (gethash path files) (gethash path dirs)))
+           :file-exists-p (lambda (path) (gethash path files))
+           :directory-exists-p (lambda (path) (gethash path dirs))
+           :cwd (lambda () #p"/tmp/")
+           :chdir (lambda (path) (declare (ignore path)) t))
+     :process-fns
+     (let ((fns (list :run-external
+                      (or external-runner
+                          (lambda (command args)
+                            (declare (ignore command args))
+                            0)))))
+       (if external-capture-runner
+           (list* :run-external-capture external-capture-runner fns)
+           fns))
+     :redirect-fns
+     (list :redirect-output #'nshell.infrastructure.acl:redirect-output
+           :redirect-input #'nshell.infrastructure.acl:redirect-input
+           :restore #'nshell.infrastructure.acl:restore-redirects)
+     :terminal-fns nil)))
+
+(defun call-builtin (context name args)
+  (funcall (nshell.application:lookup-builtin name) context args))
+
+(defun call-source-file (context path)
+  (call-builtin context "source" (list (namestring path))))
+
+(defun %builtin-output-contains-all-p (output needles)
+  (every (lambda (needle)
+           (search needle output))
+         needles))
+
+(defmacro assert-builtin-call ((context name args) &key code output output-null
+                                           output-empty contains)
+  (let ((actual-output (gensym "OUTPUT-"))
+        (actual-code (gensym "CODE-")))
+    `(multiple-value-bind (,actual-output ,actual-code)
+         (call-builtin ,context ,name ,args)
+       ,@(when (not (null code))
+           `((is (= ,code ,actual-code))))
+       ,@(when output
+           `((is (string= ,output ,actual-output))))
+       ,@(when output-null
+           `((is (null ,actual-output))))
+       ,@(when output-empty
+           `((is (string= "" ,actual-output))))
+       ,@(when contains
+           `((is (%builtin-output-contains-all-p ,actual-output ,contains))))
+       (values ,actual-output ,actual-code))))
+
+(defmacro with-captured-stdout ((stdout) &body body)
+  `(let ((,stdout (with-output-to-string (*standard-output*)
+                   ,@body)))
+     ,stdout))
+
+(defmacro assert-builtin-call-prints ((context name args)
+                                      &key code output-null stdout-contains)
+  (let ((actual-output (gensym "OUTPUT-"))
+        (actual-code (gensym "CODE-"))
+        (stdout (gensym "STDOUT-")))
+    `(let ((,stdout
+             (with-output-to-string (*standard-output*)
+               (multiple-value-bind (,actual-output ,actual-code)
+                   (call-builtin ,context ,name ,args)
+                 ,@(when (not (null code))
+                     `((is (= ,code ,actual-code))))
+                 ,@(when output-null
+                     `((is (null ,actual-output))))
+                 (values ,actual-output ,actual-code)))))
+       ,@(when stdout-contains
+           `((is (%builtin-output-contains-all-p ,stdout ,stdout-contains))))
+       ,stdout)))
+
+(defmacro assert-builtin-property ((context &key (trials '*pbt-default-trials*)) bindings &body body)
+  `(let ((,context (make-test-builtins-context)))
+     (check-property (:trials ,trials)
+         ,bindings
+       ,@body)))
+
+(defmacro with-builtins-source ((output code context lines) &body body)
+  `(let ((,context (make-test-builtins-context)))
+     (with-called-source (,output ,code ,context ,lines)
+       ,@body)))
+
+(defmacro with-builtins-source-tree ((context root source &key (prefix "nshell-test-source")) &body body)
+  `(let ((,context (make-test-builtins-context)))
+     (with-test-source-tree (,root ,source :prefix ,prefix)
+       ,@body)))
+
+(defmacro assert-builtin-cases ((context name) &body cases)
+  "Assert a table of builtin calls for the same CONTEXT and NAME."
+  `(progn
+     ,@(mapcar (lambda (case)
+                 (destructuring-bind (args &rest options) case
+                   (list* 'assert-builtin-call
+                          (list context name args)
+                          options)))
+               cases)))
+
+(defmacro assert-fish-style-table-builtin-roundtrip
+    ((context name table-form key expansion add-args list-fragment erase-error-output erase-args missing-key
+      &key body-contains))
+  `(progn
+     (multiple-value-bind (output code)
+         (call-builtin ,context ,name ,add-args)
+       (is (null output))
+       (is (= 0 code)))
+     (is (equal ,expansion (gethash ,key ,table-form)))
+     (is (= 0 (nth-value 1 (call-builtin ,context ,name (list "-q" ,key)))))
+     (is (= 1 (nth-value 1 (call-builtin ,context ,name (list "-q" ,missing-key)))))
+     ,@(when body-contains
+         `((multiple-value-bind (output code)
+               (call-builtin ,context ,name (list ,key))
+             (is (= 0 code))
+             ,@(mapcar (lambda (needle)
+                         `(is (search ,needle output)))
+                       body-contains))))
+     (multiple-value-bind (output code)
+         (call-builtin ,context ,name nil)
+       (is (= 0 code))
+       (is (search ,list-fragment output)))
+     (assert-builtin-call (,context ,name '("-e"))
+       :code 2
+       :output ,erase-error-output)
+     (is (= 0 (nth-value 1 (call-builtin ,context ,name ,erase-args))))
+     (is (null (gethash ,key ,table-form)))))

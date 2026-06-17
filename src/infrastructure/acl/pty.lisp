@@ -110,6 +110,64 @@
   "Create an unbuffered character stream for FD."
   (sb-sys:make-fd-stream fd :input t :output t :buffering :none))
 
+(defstruct pty-process
+  pid
+  pgid
+  master-fd
+  stream)
+
+(defun %set-pty-window-size (slave-stream rows cols)
+  (ignore-errors
+    (let ((proc (sb-ext:run-program "/bin/stty"
+                                    (list "rows" (princ-to-string rows)
+                                          "cols" (princ-to-string cols))
+                                    :input slave-stream
+                                    :output nil
+                                    :error nil
+                                    :wait t
+                                    :search nil)))
+      (and proc (zerop (or (sb-ext:process-exit-code proc) 1))))))
+
+(defun pty-spawn (program args &key (rows 24) (cols 80))
+  "Spawn PROGRAM with ARGS attached to a newly opened PTY."
+  #-(or darwin linux)
+  (declare (ignore program args rows cols))
+  #-(or darwin linux)
+  (error "PTY not supported on this platform")
+  #+(or darwin linux)
+  (multiple-value-bind (master-fd slave-fd slave-name) (open-pty)
+    (declare (ignore slave-name))
+    (let ((slave-stream nil)
+          (master-stream nil))
+      (handler-case
+          (progn
+            (setf slave-stream (make-pty-stream slave-fd))
+            (%set-pty-window-size slave-stream rows cols)
+            (let ((proc (sb-ext:run-program program args
+                                            :input slave-stream
+                                            :output slave-stream
+                                            :error slave-stream
+                                            :wait nil
+                                            :search nil
+                                            :environment (%get-environment))))
+              (close slave-stream)
+              (setf slave-stream nil)
+              (let* ((pid (sb-ext:process-pid proc))
+                     (pgid pid))
+                (ignore-errors (set-process-group pid pgid))
+                (setf master-stream (make-pty-stream master-fd))
+                (make-pty-process :pid pid
+                                  :pgid pgid
+                                  :master-fd master-fd
+                                  :stream master-stream))))
+        (error (condition)
+          (when slave-stream
+            (ignore-errors (close slave-stream)))
+          (when master-stream
+            (ignore-errors (close master-stream)))
+          (pty-close master-fd slave-fd)
+          (error condition))))))
+
 (defmacro with-pty ((master-stream slave-stream &optional slave-name) &body body)
   "Open a PTY pair, bind MASTER-STREAM and SLAVE-STREAM, and ensure cleanup."
   (let ((master-fd (gensym "MASTER-FD"))

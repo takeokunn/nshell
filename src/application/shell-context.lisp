@@ -1,0 +1,36 @@
+;;; Shell context - dependency container for the running shell.
+;;;
+;;; This struct is intentionally a simple composition data object.  The
+;;; composition root builds it from infrastructure and domain services; callers
+;;; receive the context instead of constructing dependencies themselves.
+(in-package #:nshell.application)
+
+(defstruct shell-context
+  "Dependency container for one nshell session."
+  (history nil :type (or null nshell.domain.history:command-history))
+  (config nil :type (or null nshell.domain.configuration::config))
+  (knowledge-base nil :type (or null nshell.domain.completion::knowledge-base))
+  (environment nil :type (or null nshell.domain.environment:environment))
+  (dispatcher nil :type (or null event-dispatcher))
+  (job-monitor nil :type (or null nshell.domain.job-control::job-monitor))
+  (alias-table (make-hash-table :test #'equal) :type hash-table)
+  (abbreviation-table (make-hash-table :test #'equal) :type hash-table)
+  (function-table (make-hash-table :test #'equal) :type hash-table)
+  (filesystem-fns nil :type list)
+  (process-fns nil :type list)
+  (terminal-fns nil :type list)
+  (signal-fns nil :type list)
+  (redirect-fns nil :type list)
+  (history-fns nil :type list)
+  (git-fns nil :type list)
+  (execution-strategy :cps :type (member :cps :os-pipes))
+  (running nil :type boolean)
+  (last-exit-code 0 :type integer)
+  (input-state nil)
+  (process-registry (make-hash-table :test #'eql) :type hash-table)
+  (terminal-rows 24 :type integer)
+  (terminal-cols 80 :type integer))
+
+(defmethod nshell.domain.completion:completion-filesystem-fns ((context shell-context))
+  "Return filesystem adapter functions used by domain completion."
+  (shell-context-filesystem-fns context))
