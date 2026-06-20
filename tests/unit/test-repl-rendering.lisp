@@ -103,7 +103,13 @@
     (setf nshell.presentation::*prompt-rendered-lines* 2
           nshell.presentation::*prompt-rendered-cursor-row* 1
           nshell.presentation::*completion-rendered-lines* 3)
-    (with-repl-input-state (:buffer "git"
+    ;; Pin the prompt width and terminal size so the post-clear re-render
+    ;; produces a deterministic single line regardless of the ambient working
+    ;; directory (the default prompt renders the cwd, which is a long path in
+    ;; the build sandbox and would otherwise wrap "git status" onto a 2nd row).
+    (with-stable-repl-prompt (:width 4 :text "ns> ")
+     (with-fixed-terminal-size (24 80)
+      (with-repl-input-state (:buffer "git"
                             :cursor-pos 3
                             :completion-index 0
                             :completion-base-buffer "git"
@@ -124,7 +130,7 @@
                         :completion-base-buffer "git"
                         :completion-base-cursor 3
                         :last-candidates '("git" "grep")
-                        :suggestion " status")))))
+                        :suggestion " status")))))))
 
 (test repl-insert-last-history-argument-updates-input-and-undo-stack
   "The REPL handler resolves Alt-dot against history and records a local undo point."

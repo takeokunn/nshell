@@ -54,6 +54,13 @@
               cp nshell $out/bin/
               runHook postInstall
             '';
+            meta = with pkgs.lib; {
+              description = "Modern, fish-inspired interactive shell written in Common Lisp";
+              homepage = "https://github.com/takeokunn/nshell";
+              license = licenses.mit;
+              platforms = systems;
+              mainProgram = "nshell";
+            };
           };
 
           test = pkgs.sbcl.buildASDFSystem {

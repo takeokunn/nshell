@@ -27,6 +27,45 @@
   (is (string= "/tmp/nshell-home/src"
                (nshell.domain.expansion:expand-tilde "~/src" (test-expansion-env)))))
 
+(test double-quoted-expands-variables
+  "Double-quoted contents expand $VAR but stay a single field."
+  (is (string= "value=bar"
+               (nshell.domain.expansion:expand-double-quoted "value=$FOO"
+                                                             (test-expansion-env)))))
+
+(test double-quoted-suppresses-globbing
+  "Double-quoted contents must not be glob-expanded."
+  (is (string= "*"
+               (nshell.domain.expansion:expand-double-quoted "*" (test-expansion-env))))
+  (is (string= "a*b?c"
+               (nshell.domain.expansion:expand-double-quoted "a*b?c"
+                                                             (test-expansion-env)))))
+
+(test parameter-default-when-unset
+  "${VAR:-word} yields the value when set and the word when unset/empty."
+  (let ((env (test-expansion-env)))
+    (is (string= "bar" (nshell.domain.expansion:expand-variables "${FOO:-fallback}" env)))
+    (is (string= "fallback" (nshell.domain.expansion:expand-variables "${MISSING:-fallback}" env)))
+    ;; word is itself expanded
+    (is (string= "bar" (nshell.domain.expansion:expand-variables "${MISSING:-$FOO}" env)))))
+
+(test parameter-alternative-when-set
+  "${VAR:+word} yields the word only when the variable is set and non-empty."
+  (let ((env (test-expansion-env)))
+    (is (string= "yes" (nshell.domain.expansion:expand-variables "${FOO:+yes}" env)))
+    (is (string= "" (nshell.domain.expansion:expand-variables "${MISSING:+yes}" env)))))
+
+(test parameter-length
+  "${#VAR} yields the length of the variable's value."
+  (let ((env (test-expansion-env)))
+    (is (string= "3" (nshell.domain.expansion:expand-variables "${#FOO}" env)))
+    (is (string= "0" (nshell.domain.expansion:expand-variables "${#MISSING}" env)))))
+
+(test parameter-plain-brace-still-works
+  "Plain ${VAR} expansion is unchanged by the operator support."
+  (is (string= "value=bar"
+               (nshell.domain.expansion:expand-variables "value=${FOO}" (test-expansion-env)))))
+
 (test glob-expansion-finds-files
   "A star glob expands to matching files."
   ;; Inject filesystem adapters for DDD purity

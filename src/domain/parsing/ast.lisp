@@ -68,12 +68,21 @@
 
 ;; -- Arg utilities (cons-based arg support) -----------------
 (defun arg-value (arg)
-  "Extract string value from an arg (string or (value . quoted-p) cons)."
+  "Extract string value from an arg (string or (value . quote-style) cons)."
   (if (consp arg) (car arg) arg))
 
-(defun arg-quoted-p (arg)
-  "Return T if arg was single-quoted and should not be expanded."
+(defun arg-quote-style (arg)
+  "Return the quote style of ARG: :SINGLE, :DOUBLE, or NIL (unquoted).
+Bare-string args and redirect-target conses are unquoted."
   (and (consp arg) (cdr arg)))
+
+(defun arg-quoted-p (arg)
+  "Return T only when ARG was single-quoted and must not be expanded at all.
+Double-quoted args still undergo variable/command expansion (but no globbing),
+so they are deliberately excluded here."
+  (let ((style (arg-quote-style arg)))
+    ;; Treat legacy T (older single-quote encoding) as :SINGLE for safety.
+    (or (eq style :single) (eq style t))))
 
 (defun command-node-arg-values (node)
   "Return all args as plain strings (unwrapping cons cells)."

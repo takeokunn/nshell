@@ -2,6 +2,8 @@
   :version "0.1.0"
   :author "nshell contributors"
   :license "MIT"
+  :homepage "https://github.com/takeokunn/nshell"
+  :source-control (:git "https://github.com/takeokunn/nshell.git")
   :description "Modern interactive shell in Common Lisp"
   :depends-on ()
   :pathname "src"

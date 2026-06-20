@@ -69,7 +69,7 @@
                 #:command-node-command #:command-node-args
                 #:sequence-node-commands #:pipeline-node-commands
                 #:sequence-node-separators
-                #:command-node-arg-values #:arg-value #:arg-quoted-p
+                #:command-node-arg-values #:arg-value #:arg-quoted-p #:arg-quote-style
              #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
              #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
              #:while-node-p #:while-node-condition #:while-node-body
@@ -97,7 +97,8 @@
   (:use #:cl)
   (:import-from #:nshell.domain.environment #:env-get)
   (:export #:*glob-directory-files-fn* #:*glob-subdirectories-fn*
-           #:expand-variables #:expand-tilde #:expand-glob #:expand-all))
+           #:expand-variables #:expand-tilde #:expand-glob #:expand-all
+           #:expand-double-quoted))
 
   (defpackage #:nshell.domain.completion
   (:use #:cl)

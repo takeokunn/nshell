@@ -41,10 +41,14 @@
 
 (defun %expand-source-arg (arg &optional environment)
   (let ((value (nshell.domain.parsing:arg-value arg)))
-    (if (or (null environment)
-            (nshell.domain.parsing:arg-quoted-p arg))
-        (list value)
-        (nshell.domain.expansion:expand-all value environment))))
+    (cond
+      ((or (null environment)
+           (nshell.domain.parsing:arg-quoted-p arg))
+       (list value))
+      ((eq (nshell.domain.parsing:arg-quote-style arg) :double)
+       (list (nshell.domain.expansion:expand-double-quoted value environment)))
+      (t
+       (nshell.domain.expansion:expand-all value environment)))))
 
 (defun %trim-command-substitution-output (output)
   (let* ((text (or output ""))
@@ -140,12 +144,22 @@
     (walk 0 (list ""))))
 
 (defun %expand-source-arg-in-context (context arg)
-  (let ((value (nshell.domain.parsing:arg-value arg)))
-    (if (nshell.domain.parsing:arg-quoted-p arg)
-        (list value)
-        (loop with environment = (shell-context-environment context)
-              for expanded in (%expand-command-substitutions context value)
-              append (nshell.domain.expansion:expand-all expanded environment)))))
+  (let ((value (nshell.domain.parsing:arg-value arg))
+        (environment (shell-context-environment context)))
+    (case (nshell.domain.parsing:arg-quote-style arg)
+      ((:single t)
+       ;; Single quotes: fully literal, no expansion of any kind.
+       (list value))
+      (:double
+       ;; Double quotes: command + variable expansion, but no globbing or
+       ;; word-splitting -- always collapses to exactly one field.
+       (list (apply #'concatenate 'string
+                    (loop for expanded in (%expand-command-substitutions context value)
+                          collect (nshell.domain.expansion:expand-double-quoted
+                                   expanded environment)))))
+      (t
+       (loop for expanded in (%expand-command-substitutions context value)
+             append (nshell.domain.expansion:expand-all expanded environment))))))
 
 (defun %line-command-args (command-node &optional environment)
   (loop for arg in (nshell.domain.parsing:command-node-args command-node)

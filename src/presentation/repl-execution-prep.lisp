@@ -25,8 +25,9 @@
 (defun expand-arg-list (args)
   (loop for arg in args
         for value = (if (consp arg) (car arg) arg)
-        for quoted-p = (and (consp arg) (cdr arg))
-        if quoted-p
-          append (list value)
-        else
-          append (nshell.domain.expansion:expand-all value (ensure-environment))))
+        for style = (and (consp arg) (cdr arg))
+        append (case style
+                 ((:single t) (list value))
+                 (:double (list (nshell.domain.expansion:expand-double-quoted
+                                 value (ensure-environment))))
+                 (t (nshell.domain.expansion:expand-all value (ensure-environment))))))

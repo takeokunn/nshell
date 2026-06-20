@@ -133,6 +133,49 @@
 (defun variable-name-start-p (ch)
   (or (alpha-char-p ch) (char= ch #\_)))
 
+(defun %parameter-name-end (content)
+  "Return the index in CONTENT where the parameter name ends (i.e. the start of
+an operator such as :-, :=, :+, :?), or the length of CONTENT when it is a plain
+name."
+  (or (position-if-not #'variable-name-char-p content)
+      (length content)))
+
+(defun %expand-braced-parameter (content env)
+  "Expand the CONTENT of a ${...} parameter expansion.
+Supports plain ${NAME}, length ${#NAME}, and the POSIX operators
+${NAME:-word}, ${NAME-word}, ${NAME:=word}, ${NAME:+word}, ${NAME+word},
+and ${NAME:?word}. A leading colon makes the test fire on unset OR empty;
+without it, only on unset. WORD is itself variable-expanded.
+Note: the := assignment side effect is intentionally not performed here, since
+expansion is pure; it expands to the default like :- ."
+  (cond
+    ;; ${#NAME} -> length of NAME's value.
+    ((and (plusp (length content)) (char= (char content 0) #\#))
+     (let ((value (nshell.domain.environment:env-get env (subseq content 1))))
+       (princ-to-string (length (or value "")))))
+    (t
+     (let* ((op-pos (%parameter-name-end content))
+            (name (subseq content 0 op-pos))
+            (rest (subseq content op-pos))
+            (raw (nshell.domain.environment:env-get env name))
+            (set-p (not (null raw)))
+            (value (or raw "")))
+       (if (zerop (length rest))
+           value
+           (let* ((colon (char= (char rest 0) #\:))
+                  (op-index (if colon 1 0))
+                  (op (when (< op-index (length rest)) (char rest op-index)))
+                  (word (expand-variables
+                         (subseq rest (min (length rest) (1+ op-index))) env))
+                  (fire (if colon
+                            (or (not set-p) (zerop (length value)))
+                            (not set-p))))
+             (case op
+               ((#\- #\=) (if fire word value))
+               (#\+ (if fire "" word))
+               (#\? (if fire word value))
+               (t (concatenate 'string value rest)))))))))
+
 (defun expand-variables (input env)
   "Expand $VAR and ${VAR} occurrences in INPUT using ENV.
 Undefined variables expand to the empty string."
@@ -146,9 +189,10 @@ Undefined variables expand to the empty string."
                ((char= (char input (1+ i)) #\{)
                 (let ((end (position #\} input :start (+ i 2))))
                   (if end
-                      (let* ((name (subseq input (+ i 2) end))
-                             (value (nshell.domain.environment:env-get env name)))
-                        (write-string (or value "") out)
+                      (progn
+                        (write-string
+                         (%expand-braced-parameter (subseq input (+ i 2) end) env)
+                         out)
                         (setf i end))
                       (write-char ch out))))
                ((variable-name-start-p (char input (1+ i)))
@@ -203,3 +247,9 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
 (defun expand-all (input env)
   "Apply tilde, variable, and glob expansion to INPUT."
   (expand-glob (expand-variables (expand-tilde input env) env)))
+
+(defun expand-double-quoted (input env)
+  "Expand INPUT as the contents of a double-quoted string.
+Variables are expanded, but tilde, globbing, and word-splitting are suppressed
+\(POSIX semantics), so the result is always a single string."
+  (expand-variables input env))

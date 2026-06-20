@@ -1,11 +1,17 @@
 (in-package #:nshell.domain.parsing)
 
-(defstruct (token (:constructor make-token (type value &optional (start 0) (end 0) (quoted-p nil))))
+(defstruct (token (:constructor make-token (type value &optional (start 0) (end 0)
+                                            (quoted-p nil) (quote-style nil))))
   (type :word :type keyword :read-only t)
   (value "" :type string :read-only t)
   (start 0 :type integer :read-only t)
   (end 0 :type integer :read-only t)
-  (quoted-p nil :type boolean :read-only t))
+  ;; QUOTED-P is retained for backward compatibility and is true only for
+  ;; single-quoted (fully literal) words. QUOTE-STYLE carries the finer
+  ;; distinction needed for correct expansion: NIL (unquoted), :SINGLE, or
+  ;; :DOUBLE. Double-quoted words still expand variables but must not glob.
+  (quoted-p nil :type boolean :read-only t)
+  (quote-style nil :type symbol :read-only t))
 
 ;; token-type, token-value, token-start, token-end are auto-generated struct accessors
 
@@ -85,13 +91,13 @@
     (%tokenizer-state-advance state)
     ch))
 
-(defun %tokenizer-state-push-token (state type value start end &optional quoted-p)
-  (push (make-token type value start end quoted-p) (tokenizer-state-tokens state)))
+(defun %tokenizer-state-push-token (state type value start end &optional quoted-p quote-style)
+  (push (make-token type value start end quoted-p quote-style) (tokenizer-state-tokens state)))
 
-(defun %tokenizer-state-emit-token (state type value &optional quoted-p)
+(defun %tokenizer-state-emit-token (state type value &optional quoted-p quote-style)
   (let ((start (tokenizer-state-pos state))
         (width (length value)))
-    (%tokenizer-state-push-token state type value start (+ start width) quoted-p)
+    (%tokenizer-state-push-token state type value start (+ start width) quoted-p quote-style)
     (%tokenizer-state-advance state width)))
 
 (defun %tokenizer-balanced-substitution-end (state start)
@@ -199,7 +205,7 @@
                                    start
                                    (tokenizer-state-pos state)))))
 
-(defun %tokenizer-read-delimited (state delimiter &key escape-p quoted-p)
+(defun %tokenizer-read-delimited (state delimiter &key escape-p quoted-p quote-style)
   (let ((start (tokenizer-state-pos state))
         (chars '()))
     (%tokenizer-state-advance state)
@@ -222,16 +228,19 @@
           (%tokenizer-state-advance state)
           (%tokenizer-state-push-token state :word (coerce (nreverse chars) 'string)
                                        start (tokenizer-state-pos state)
-                                       quoted-p))
+                                       quoted-p quote-style))
         (progn
           (setf (tokenizer-state-incomplete state) t)
           (%tokenizer-state-push-token state :error (coerce (nreverse chars) 'string) start (tokenizer-state-pos state))))))
 
 (defun %tokenizer-read-single-quoted (state)
-  (%tokenizer-read-delimited state #\' :quoted-p t))
+  (%tokenizer-read-delimited state #\' :quoted-p t :quote-style :single))
 
 (defun %tokenizer-read-double-quoted (state)
-  (%tokenizer-read-delimited state #\" :escape-p t))
+  ;; Double quotes suppress globbing and word-splitting but still permit
+  ;; variable/command expansion, so they are NOT marked QUOTED-P (literal);
+  ;; the :DOUBLE quote-style drives glob suppression during expansion.
+  (%tokenizer-read-delimited state #\" :escape-p t :quote-style :double))
 
 (defun %tokenizer-read-comment (state)
   (loop while (< (tokenizer-state-pos state) (tokenizer-state-len state))

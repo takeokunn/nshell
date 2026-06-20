@@ -1,0 +1,19 @@
+## Summary
+
+<!-- What does this PR change, and why? -->
+
+## User-visible effect
+
+<!-- How does this change behavior for someone using nshell? -->
+
+## Checklist
+
+- [ ] Added or updated tests under `tests/`
+- [ ] `nix flake check` passes locally (build + full suite + smoke tests)
+- [ ] Tests are hermetic (no dependence on cwd, terminal size, or environment)
+- [ ] Updated `CHANGELOG.md` under `[Unreleased]`
+- [ ] Followed the layering in `CONTRIBUTING.md` (domain has no I/O)
+
+## Related issues
+
+<!-- e.g. Closes #123 -->

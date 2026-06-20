@@ -210,7 +210,7 @@
     (with-complete-command-line (result ast line)
       (is (string= "echo" (nshell.domain.parsing:command-node-command ast)))
       (is (equal '("hello world" "tail")
-                 (nshell.domain.parsing:command-node-args ast))))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))))
 
 (test e2e-alt-d-preserves-quoted-word-cycle
   (let* ((events (read-key-events-from-string (esc-sequence "d")))
@@ -524,7 +524,7 @@
     (with-complete-command-line (result ast line)
       (is (nshell.domain.parsing:command-node-p ast))
       (is (equal (list (format nil "hello~%world"))
-                 (nshell.domain.parsing:command-node-args ast))))
+                 (nshell.domain.parsing:command-node-arg-values ast))))
     (nshell.domain.history:history-add history line)
     (is (= 1 (nshell.domain.history:history-size history)))))
 (test e2e-pipeline-smoke

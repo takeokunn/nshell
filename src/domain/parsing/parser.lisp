@@ -62,10 +62,11 @@
         (:word
          (if (%token-reduction-state-current-cmd state)
              (progn
-               (push (if (token-quoted-p tok)
-                         (cons (token-value tok) t)
-                         (token-value tok))
-                     (%token-reduction-state-current-args state))
+               (let ((style (token-quote-style tok)))
+                 (push (if style
+                           (cons (token-value tok) style)
+                           (token-value tok))
+                       (%token-reduction-state-current-args state)))
                (setf (%token-reduction-state-pending-redirect-token state) nil))
              (setf (%token-reduction-state-current-cmd state) (token-value tok)
                    (%token-reduction-state-current-cmd-token state) tok)))
