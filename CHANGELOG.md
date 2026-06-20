@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Arithmetic expansion `$((expression))`: integer `+ - * / %`, parentheses,
+  unary `- + ! ~`, comparisons (`== != < > <= >=`), and logical `&& ||`, with
+  bare names resolved from the environment (unset → 0) and division-by-zero
+  reported as an error.
 - POSIX parameter-expansion operators inside `${...}`: `${VAR:-default}`,
   `${VAR-default}`, `${VAR:=default}`, `${VAR:+alt}`, `${VAR+alt}`,
   `${VAR:?msg}`, and length `${#VAR}`. The default/alternate word is itself

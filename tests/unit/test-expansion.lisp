@@ -66,6 +66,52 @@
   (is (string= "value=bar"
                (nshell.domain.expansion:expand-variables "value=${FOO}" (test-expansion-env)))))
 
+(defun arith-env ()
+  (let ((env (nshell.domain.environment:make-environment)))
+    (setf env (nshell.domain.environment:env-set env "X" "10" nil))
+    (setf env (nshell.domain.environment:env-set env "Y" "3" nil))
+    env))
+
+(test arithmetic-basic-operators
+  "Integer + - * / % with precedence and parentheses."
+  (let ((env (arith-env)))
+    (is (= 7 (nshell.domain.expansion:evaluate-arithmetic "1 + 2 * 3" env)))
+    (is (= 9 (nshell.domain.expansion:evaluate-arithmetic "(1 + 2) * 3" env)))
+    (is (= 1 (nshell.domain.expansion:evaluate-arithmetic "10 % 3" env)))
+    (is (= 3 (nshell.domain.expansion:evaluate-arithmetic "10 / 3" env)))
+    (is (= -5 (nshell.domain.expansion:evaluate-arithmetic "-2 - 3" env)))))
+
+(test arithmetic-uses-variables
+  "Bare names resolve from the environment; unset names are 0."
+  (let ((env (arith-env)))
+    (is (= 13 (nshell.domain.expansion:evaluate-arithmetic "X + Y" env)))
+    (is (= 30 (nshell.domain.expansion:evaluate-arithmetic "X * Y" env)))
+    (is (= 0 (nshell.domain.expansion:evaluate-arithmetic "UNSET" env)))))
+
+(test arithmetic-comparisons-and-logic
+  "Comparison and logical operators yield 1/0."
+  (let ((env (arith-env)))
+    (is (= 1 (nshell.domain.expansion:evaluate-arithmetic "X > Y" env)))
+    (is (= 0 (nshell.domain.expansion:evaluate-arithmetic "X < Y" env)))
+    (is (= 1 (nshell.domain.expansion:evaluate-arithmetic "X == 10" env)))
+    (is (= 1 (nshell.domain.expansion:evaluate-arithmetic "X > 0 && Y > 0" env)))
+    (is (= 0 (nshell.domain.expansion:evaluate-arithmetic "!1" env)))))
+
+(test arithmetic-substitution-in-text
+  "$((expr)) is substituted within surrounding text, with variable expansion."
+  (let ((env (arith-env)))
+    (is (string= "result=13"
+                 (nshell.domain.expansion:expand-arithmetic "result=$((X + Y))" env)))
+    (is (string= "a4b"
+                 (nshell.domain.expansion:expand-arithmetic "a$(( (1+1) * 2 ))b" env)))
+    ;; Non-arithmetic dollar-parens are left untouched.
+    (is (string= "$(echo hi)"
+                 (nshell.domain.expansion:expand-arithmetic "$(echo hi)" env)))))
+
+(test arithmetic-division-by-zero-signals
+  "Division by zero is an error rather than a crash-producing value."
+  (signals error (nshell.domain.expansion:evaluate-arithmetic "1 / 0" (arith-env))))
+
 (test glob-expansion-finds-files
   "A star glob expands to matching files."
   ;; Inject filesystem adapters for DDD purity

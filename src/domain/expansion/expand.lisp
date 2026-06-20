@@ -245,8 +245,8 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
             (list pattern)))))
 
 (defun expand-all (input env)
-  "Apply tilde, variable, and glob expansion to INPUT."
-  (expand-glob (expand-variables (expand-tilde input env) env)))
+  "Apply arithmetic, tilde, variable, and glob expansion to INPUT."
+  (expand-glob (expand-variables (expand-arithmetic (expand-tilde input env) env) env)))
 
 (defun expand-double-quoted (input env)
   "Expand INPUT as the contents of a double-quoted string.

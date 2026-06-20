@@ -26,6 +26,7 @@
    (:file "domain/parsing/parser")
     (:file "domain/environment/env")
     (:file "domain/expansion/expand")
+    (:file "domain/expansion/arithmetic")
     (:file "domain/abbreviation/expansion")
    (:file "domain/completion/candidate")
    (:file "domain/completion/knowledge-base")
