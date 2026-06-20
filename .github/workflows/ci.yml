@@ -28,11 +28,30 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Enable Nix build cache
-        uses: DeterminateSystems/magic-nix-cache-action@main
-
       - name: Build, test, and smoke-test (nix flake check)
         run: nix flake check --print-build-logs
+
+  integration:
+    # Runs the FULL suite (including PTY and external-process integration tests)
+    # in a dev shell rather than the hermetic Nix sandbox, so the tests skipped
+    # by `nix flake check` (which need /bin/cat, stty, a real PTY, ...) get real
+    # coverage on a runner where those facilities exist.
+    name: integration tests (full OS environment)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Run full test suite in a dev shell (non-sandboxed)
+        run: |
+          nix develop --command sbcl --non-interactive \
+            --eval '(require :asdf)' \
+            --eval '(setf asdf:*compile-file-warnings-behaviour* :warn)' \
+            --eval '(setf asdf:*compile-file-failure-behaviour* :warn)' \
+            --eval '(push (truename "./") asdf:*central-registry*)' \
+            --eval '(let ((ok (handler-case (asdf:test-system :nshell/test) (error (e) (format t "FATAL: ~a~%" e) nil)))) (unless ok (sb-ext:quit :unix-status 1)))'
 
   binary:
     name: build release binary (${{ matrix.os }})
@@ -48,9 +67,6 @@ jobs:
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
-
-      - name: Enable Nix build cache
-        uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Build nshell binary
         run: nix build --print-build-logs

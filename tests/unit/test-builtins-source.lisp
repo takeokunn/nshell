@@ -313,6 +313,7 @@
 
 (test source-pipeline-uses-source-strategy-for-external-pipelines
   "source keeps external pipelines on the source execution path when strategy is :cps."
+  (skip-in-sandbox "executes /bin/echo and /bin/cat"
   (let ((context (make-test-builtins-context)))
     (setf (nshell.application:shell-context-execution-strategy context) :cps)
     (with-temporary-function
@@ -323,7 +324,7 @@
       (with-called-source (output code context
                                   '("/bin/echo cps-strategy | /bin/cat"))
         (is (= 0 code))
-        (is (string= (format nil "cps-strategy~%") output))))))
+        (is (string= (format nil "cps-strategy~%") output)))))))
 
 (test source-pipeline-uses-os-pipes-strategy-for-external-pipelines
   "source dispatches external pipelines to spawn-pipeline when strategy is :os-pipes."
@@ -368,6 +369,7 @@
 
 (test pbt-source-pipeline-keeps-external-only-pipelines-on-source-path-under-cps
   "Generated external-only pipelines stay on the source path when strategy is :cps."
+  (skip-in-sandbox "executes /bin/echo and /bin/cat"
   (check-property (:trials 50)
       ((payload (gen-shell-word :min-length 1 :max-length 8)
                 #'shrink-prompt-text))
@@ -384,7 +386,7 @@
                                 (list (format nil "/bin/echo ~a | /bin/cat" payload)))
           (is (not spawned))
           (is (= 0 code))
-          (is (string= (format nil "~a~%" payload) output)))))))
+          (is (string= (format nil "~a~%" payload) output))))))))
 
 (test pbt-source-pipeline-routes-external-only-pipelines-to-spawn-pipeline-under-os-pipes
   "Generated external-only pipelines route through spawn-pipeline when strategy is :os-pipes."

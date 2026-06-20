@@ -30,9 +30,6 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Enable Nix build cache
-        uses: DeterminateSystems/magic-nix-cache-action@main
-
       - name: Build release binary
         run: nix build --print-build-logs
 

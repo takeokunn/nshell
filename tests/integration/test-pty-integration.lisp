@@ -59,6 +59,7 @@
   #-(or darwin linux)
   (skip "PTY tests are only supported on Darwin and Linux")
   #+(or darwin linux)
+  (skip-in-sandbox "requires /bin/cat"
   (let ((pty nil))
     (unwind-protect
          (progn
@@ -70,13 +71,14 @@
                        (pty-test-read-until
                         (nshell.infrastructure.acl:pty-process-master-fd pty)
                         "hello-from-pty"))))
-      (pty-test-close-process pty))))
+      (pty-test-close-process pty)))))
 
 (test pty-spawn-propagates-window-size
   "PTY-SPAWN propagates rows/cols to the child terminal."
   #-(or darwin linux)
   (skip "PTY tests are only supported on Darwin and Linux")
   #+(or darwin linux)
+  (skip-in-sandbox "requires external stty/sleep"
   (let ((pty nil))
     (unwind-protect
          (progn
@@ -87,7 +89,7 @@
                        (pty-test-read-until
                         (nshell.infrastructure.acl:pty-process-master-fd pty)
                         "37 123"))))
-      (pty-test-close-process pty))))
+      (pty-test-close-process pty)))))
 
 (test pty-foreground-suspend-resume
   "A stopped PTY foreground process can be continued and observed to exit."

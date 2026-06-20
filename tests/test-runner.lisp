@@ -3,6 +3,18 @@
 
 (in-package #:nshell/test)
 
+(defun in-hermetic-sandbox-p ()
+  "True when running inside a hermetic Nix build sandbox, where real OS process
+and PTY facilities (/bin/sh, /bin/cat, a working /dev/pts) are unavailable. Such
+integration tests are skipped here and exercised by the non-sandboxed CI job."
+  (and (uiop:getenv "NIX_BUILD_TOP") t))
+
+(defmacro skip-in-sandbox (reason &body body)
+  "Run BODY only when not in a hermetic sandbox; otherwise skip with REASON."
+  `(if (in-hermetic-sandbox-p)
+       (skip "~a (skipped in hermetic sandbox)" ,reason)
+       (progn ,@body)))
+
 (def-suite nshell-tests
   :description "nshell test suite - all tests")
 
