@@ -61,6 +61,24 @@
     (is (string= "3" (nshell.domain.expansion:expand-variables "${#FOO}" env)))
     (is (string= "0" (nshell.domain.expansion:expand-variables "${#MISSING}" env)))))
 
+(test parameter-prefix-and-suffix-strip
+  "${VAR#pat} / ## strip a prefix; ${VAR%pat} / %% strip a suffix (glob)."
+  (let ((env (test-expansion-env)))            ; FOO = bar
+    (is (string= "ar" (nshell.domain.expansion:expand-variables "${FOO#b}" env)))
+    (is (string= "r"  (nshell.domain.expansion:expand-variables "${FOO##*a}" env)))
+    (is (string= "ba" (nshell.domain.expansion:expand-variables "${FOO%r}" env)))
+    (is (string= "b"  (nshell.domain.expansion:expand-variables "${FOO%%a*}" env)))
+    ;; ${#FOO} is still length, not prefix strip.
+    (is (string= "3"  (nshell.domain.expansion:expand-variables "${#FOO}" env)))))
+
+(test parameter-substitution-operator
+  "${VAR/pat/rep} replaces the first match; // replaces all (literal)."
+  (let ((env (nshell.domain.environment:make-environment)))
+    (setf env (nshell.domain.environment:env-set env "P" "a-a-a" nil))
+    (is (string= "X-a-a" (nshell.domain.expansion:expand-variables "${P/a/X}" env)))
+    (is (string= "X-X-X" (nshell.domain.expansion:expand-variables "${P//a/X}" env)))
+    (is (string= "a-a-a" (nshell.domain.expansion:expand-variables "${P/z/X}" env)))))
+
 (test parameter-plain-brace-still-works
   "Plain ${VAR} expansion is unchanged by the operator support."
   (is (string= "value=bar"

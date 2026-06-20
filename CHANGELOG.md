@@ -31,8 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reported as an error.
 - POSIX parameter-expansion operators inside `${...}`: `${VAR:-default}`,
   `${VAR-default}`, `${VAR:=default}`, `${VAR:+alt}`, `${VAR+alt}`,
-  `${VAR:?msg}`, and length `${#VAR}`. The default/alternate word is itself
-  variable-expanded. (The `:=` assignment side effect is not yet performed.)
+  `${VAR:?msg}`, length `${#VAR}`, prefix/suffix stripping `${VAR#pat}` /
+  `${VAR##pat}` / `${VAR%pat}` / `${VAR%%pat}` (glob patterns), and substitution
+  `${VAR/pat/rep}` / `${VAR//pat/rep}` (literal patterns). The
+  default/alternate word and patterns are themselves variable-expanded. (The
+  `:=` assignment side effect is not yet performed.)
 - `CONTRIBUTING.md`, `SECURITY.md`, GitHub issue templates, and a pull-request
   template.
 - `LICENSE` file (MIT) at the repository root.

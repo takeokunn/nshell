@@ -140,17 +140,73 @@ name."
   (or (position-if-not #'variable-name-char-p content)
       (length content)))
 
+(defun %string-replace (value old new global)
+  "Replace OLD (a literal substring) with NEW in VALUE, the first occurrence only
+unless GLOBAL is true."
+  (if (zerop (length old))
+      value
+      (with-output-to-string (out)
+        (loop with start = 0
+              for pos = (search old value :start2 start)
+              while pos
+              do (write-string (subseq value start pos) out)
+                 (write-string new out)
+                 (setf start (+ pos (length old)))
+                 (unless global
+                   (write-string (subseq value start) out)
+                   (return))
+              finally (write-string (subseq value start) out)))))
+
+(defun %param-strip-prefix (value rest env)
+  "Strip a glob-matching prefix from VALUE. REST is the text after the first #;
+a further leading # selects the longest match instead of the shortest."
+  (let* ((longest (and (plusp (length rest)) (char= (char rest 0) #\#)))
+         (pattern (expand-variables (subseq rest (if longest 1 0)) env)))
+    (if (zerop (length pattern))
+        value
+        (dolist (i (if longest
+                       (loop for i from (length value) downto 0 collect i)
+                       (loop for i from 0 to (length value) collect i))
+                   value)
+          (when (glob-match-p pattern (subseq value 0 i))
+            (return (subseq value i)))))))
+
+(defun %param-strip-suffix (value rest env)
+  "Strip a glob-matching suffix from VALUE. REST is the text after the first %;
+a further leading % selects the longest match instead of the shortest."
+  (let* ((longest (and (plusp (length rest)) (char= (char rest 0) #\%)))
+         (pattern (expand-variables (subseq rest (if longest 1 0)) env))
+         (len (length value)))
+    (if (zerop (length pattern))
+        value
+        (dolist (i (if longest
+                       (loop for i from 0 to len collect i)
+                       (loop for i from len downto 0 collect i))
+                   value)
+          (when (glob-match-p pattern (subseq value i))
+            (return (subseq value 0 i)))))))
+
+(defun %param-substitute (value rest env)
+  "Substitute within VALUE for ${VAR/pat/rep}. REST is the text after the first
+/; a further leading / replaces all occurrences. PAT is matched literally."
+  (let* ((global (and (plusp (length rest)) (char= (char rest 0) #\/)))
+         (body (subseq rest (if global 1 0)))
+         (slash (position #\/ body))
+         (pat (expand-variables (if slash (subseq body 0 slash) body) env))
+         (rep (expand-variables (if slash (subseq body (1+ slash)) "") env)))
+    (%string-replace value pat rep global)))
+
 (defun %expand-braced-parameter (content env)
   "Expand the CONTENT of a ${...} parameter expansion.
-Supports plain ${NAME}, length ${#NAME}, and the POSIX operators
-${NAME:-word}, ${NAME-word}, ${NAME:=word}, ${NAME:+word}, ${NAME+word},
-and ${NAME:?word}. A leading colon makes the test fire on unset OR empty;
-without it, only on unset. WORD is itself variable-expanded.
-Note: the := assignment side effect is intentionally not performed here, since
-expansion is pure; it expands to the default like :- ."
+Supports plain ${NAME}, length ${#NAME}, the POSIX default/alternate operators
+${NAME:-word} / :- / := / :+ / :? (a leading colon makes the test fire on unset
+OR empty), prefix/suffix stripping ${NAME#pat} / ## / % / %% (glob patterns),
+and substitution ${NAME/pat/rep} / // (literal patterns). WORD/patterns are
+themselves variable-expanded. The := assignment side effect is not performed."
   (cond
-    ;; ${#NAME} -> length of NAME's value.
-    ((and (plusp (length content)) (char= (char content 0) #\#))
+    ;; ${#NAME} -> length (only when # precedes a bare name, not ${NAME#pat}).
+    ((and (plusp (length content)) (char= (char content 0) #\#)
+          (every #'variable-name-char-p (subseq content 1)))
      (let ((value (nshell.domain.environment:env-get env (subseq content 1))))
        (princ-to-string (length (or value "")))))
     (t
@@ -174,6 +230,9 @@ expansion is pure; it expands to the default like :- ."
                ((#\- #\=) (if fire word value))
                (#\+ (if fire "" word))
                (#\? (if fire word value))
+               (#\# (%param-strip-prefix value (subseq rest 1) env))
+               (#\% (%param-strip-suffix value (subseq rest 1) env))
+               (#\/ (%param-substitute value (subseq rest 1) env))
                (t (concatenate 'string value rest)))))))))
 
 (defun expand-variables (input env)
