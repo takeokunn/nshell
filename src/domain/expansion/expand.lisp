@@ -244,9 +244,82 @@ Returns a one-element list containing PATTERN when it has no glob syntax or no m
             (sort (mapcar #'namestring matches) #'string<)
             (list pattern)))))
 
+(defun %find-matching-brace (string start)
+  "Return the index of the #\} matching the #\{ at START, or NIL if unbalanced."
+  (loop with depth = 0
+        for i from start below (length string)
+        for ch = (char string i)
+        do (cond ((char= ch #\{) (incf depth))
+                 ((char= ch #\}) (decf depth) (when (zerop depth) (return i))))))
+
+(defun %split-top-level-commas (string)
+  "Split STRING on commas that are not nested inside braces."
+  (let ((parts '()) (depth 0) (start 0))
+    (loop for i from 0 below (length string)
+          for ch = (char string i)
+          do (cond ((char= ch #\{) (incf depth))
+                   ((char= ch #\}) (decf depth))
+                   ((and (char= ch #\,) (zerop depth))
+                    (push (subseq string start i) parts)
+                    (setf start (1+ i)))))
+    (push (subseq string start) parts)
+    (nreverse parts)))
+
+(defun %brace-range-expansion (content)
+  "Return the list of expansions for a numeric (1..5) or single-character (a..e)
+range CONTENT, or NIL when CONTENT is not a valid range."
+  (let ((dots (search ".." content)))
+    (when dots
+      (let ((lo (subseq content 0 dots))
+            (hi (subseq content (+ dots 2))))
+        (cond
+          ((and (plusp (length lo)) (every #'digit-char-p lo)
+                (plusp (length hi)) (every #'digit-char-p hi))
+           (let ((a (parse-integer lo)) (b (parse-integer hi)))
+             (if (<= a b)
+                 (loop for n from a to b collect (princ-to-string n))
+                 (loop for n from a downto b collect (princ-to-string n)))))
+          ((and (= 1 (length lo)) (alpha-char-p (char lo 0))
+                (= 1 (length hi)) (alpha-char-p (char hi 0)))
+           (let ((a (char-code (char lo 0))) (b (char-code (char hi 0))))
+             (if (<= a b)
+                 (loop for c from a to b collect (string (code-char c)))
+                 (loop for c from a downto b collect (string (code-char c))))))
+          (t nil))))))
+
+(defun expand-braces (input)
+  "Expand brace patterns {a,b,c} and ranges {1..5}/{a..e} in INPUT, returning a
+list of strings (always at least one). A brace group with no top-level comma and
+no valid range is left literal, matching shell behavior."
+  (let ((open (position #\{ input)))
+    (if (null open)
+        (list input)
+        (let ((close (%find-matching-brace input open)))
+          (if (null close)
+              (list input)
+              (let* ((prefix (subseq input 0 open))
+                     (content (subseq input (1+ open) close))
+                     (suffix (subseq input (1+ close)))
+                     (options (or (%brace-range-expansion content)
+                                  (let ((parts (%split-top-level-commas content)))
+                                    (when (> (length parts) 1) parts)))))
+                (if (null options)
+                    (mapcar (lambda (s)
+                              (concatenate 'string prefix "{" content "}" s))
+                            (expand-braces suffix))
+                    (loop for opt in options
+                          append (loop for opt-exp in (expand-braces opt)
+                                       append (loop for suf in (expand-braces suffix)
+                                                    collect (concatenate 'string
+                                                                         prefix opt-exp suf)))))))))))
+
 (defun expand-all (input env)
-  "Apply arithmetic, tilde, variable, and glob expansion to INPUT."
-  (expand-glob (expand-variables (expand-arithmetic (expand-tilde input env) env) env)))
+  "Apply brace, tilde, arithmetic, variable, and glob expansion to INPUT,
+returning the (possibly multiple) resulting fields."
+  (loop for braced in (expand-braces input)
+        append (expand-glob
+                (expand-variables
+                 (expand-arithmetic (expand-tilde braced env) env) env))))
 
 (defun expand-double-quoted (input env)
   "Expand INPUT as the contents of a double-quoted string.

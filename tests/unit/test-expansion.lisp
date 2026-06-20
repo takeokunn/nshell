@@ -112,6 +112,32 @@
   "Division by zero is an error rather than a crash-producing value."
   (signals error (nshell.domain.expansion:evaluate-arithmetic "1 / 0" (arith-env))))
 
+(test brace-comma-expansion
+  "{a,b,c} expands to each option with surrounding prefix/suffix."
+  (is (equal '("abd" "acd")
+             (nshell.domain.expansion:expand-braces "a{b,c}d")))
+  (is (equal '("pre1.txt" "pre2.txt" "pre3.txt")
+             (nshell.domain.expansion:expand-braces "pre{1,2,3}.txt"))))
+
+(test brace-numeric-range
+  "{1..4} expands to an ascending integer sequence (and {3..1} descends)."
+  (is (equal '("1" "2" "3" "4") (nshell.domain.expansion:expand-braces "{1..4}")))
+  (is (equal '("3" "2" "1") (nshell.domain.expansion:expand-braces "{3..1}"))))
+
+(test brace-char-range
+  "{a..c} expands over characters."
+  (is (equal '("a" "b" "c") (nshell.domain.expansion:expand-braces "{a..c}"))))
+
+(test brace-nested-and-cartesian
+  "Nested and adjacent groups expand as a cartesian product."
+  (is (equal '("ax" "ay" "bx" "by")
+             (nshell.domain.expansion:expand-braces "{a,b}{x,y}"))))
+
+(test brace-literal-when-no-comma-or-range
+  "A single-element group is left literal, matching shell behavior."
+  (is (equal '("{a}") (nshell.domain.expansion:expand-braces "{a}")))
+  (is (equal '("nobrace") (nshell.domain.expansion:expand-braces "nobrace"))))
+
 (test glob-expansion-finds-files
   "A star glob expands to matching files."
   ;; Inject filesystem adapters for DDD purity

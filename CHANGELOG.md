@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Brace expansion: comma lists `{a,b,c}` and ranges `{1..5}` / `{a..e}`,
+  including nested and adjacent (cartesian) groups. A group with no top-level
+  comma or valid range is left literal, matching shell behavior.
 - Arithmetic expansion `$((expression))`: integer `+ - * / %`, parentheses,
   unary `- + ! ~`, comparisons (`== != < > <= >=`), and logical `&& ||`, with
   bare names resolved from the environment (unset → 0) and division-by-zero

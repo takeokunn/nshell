@@ -98,7 +98,8 @@
   (:import-from #:nshell.domain.environment #:env-get)
   (:export #:*glob-directory-files-fn* #:*glob-subdirectories-fn*
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all
-           #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic))
+           #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic
+           #:expand-braces))
 
   (defpackage #:nshell.domain.completion
   (:use #:cl)
