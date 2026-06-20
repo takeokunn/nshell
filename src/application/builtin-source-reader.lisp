@@ -202,8 +202,12 @@ handle it later."
                           collect (nshell.domain.expansion:expand-double-quoted
                                    expanded environment)))))
       (t
-       (loop for expanded in (%expand-command-substitutions context value)
-             append (nshell.domain.expansion:expand-all expanded environment))))))
+       ;; A bare unquoted $argv expands to each argument as its own word
+       ;; (fish semantics), so a function can forward its arguments verbatim.
+       (if (string= value "$argv")
+           (copy-list nshell.domain.expansion:*positional-args*)
+           (loop for expanded in (%expand-command-substitutions context value)
+                 append (nshell.domain.expansion:expand-all expanded environment)))))))
 
 (defun %line-command-args (command-node &optional environment)
   (loop for arg in (nshell.domain.parsing:command-node-args command-node)

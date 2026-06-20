@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-21
+
+### Added
+- Function arguments: a called user-defined function now receives its arguments
+  as the fish-style list `$argv` (a bare unquoted `$argv` forwards each argument
+  as a separate word) and indexed `$argv[N]` (1-based). POSIX `$1`..`$9` remain
+  literal, matching fish.
+
 ## [0.2.2] - 2026-06-21
 
 ### Changed

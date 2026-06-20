@@ -141,10 +141,10 @@ Unit, integration, property-based, and end-to-end (PTY) tests live under
 
 nshell is converging on world-class interactive-shell parity. Near-term focus:
 
-- **Shell language depth** — remaining parameter-expansion forms (`##`, `%%`,
-  pattern substitution), here-docs, and positional/`$argv` parameters.
-  (Quoting, `${VAR:-default}`, arithmetic `$((...))`, brace expansion, command
-  substitution `$(...)`/`(...)`, and fd redirections `2>`/`2>&1`/`&>` are done.)
+- **Shell language depth** — here-docs/here-strings and richer list variables.
+  (Quoting, parameter expansion incl. patterns, arithmetic `$((...))`, brace
+  expansion, command substitution `$(...)`/`(...)`, fd redirections
+  `2>`/`2>&1`/`&>`, and function arguments via `$argv`/`$argv[N]` are done.)
 - **Job control hardening** — robust foreground process-group handling so
   `Ctrl-C` / `Ctrl-Z` reliably interrupt and suspend pipelines.
 - **Editor parity** — visual selection and numeric arguments (vi-mode and

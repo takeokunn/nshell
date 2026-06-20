@@ -33,6 +33,20 @@
                (nshell.domain.expansion:expand-double-quoted "value=$FOO"
                                                              (test-expansion-env)))))
 
+(test argv-and-indexed-argv-expansion
+  "$argv joins args with spaces; $argv[N] selects one (fish-style, 1-based)."
+  (let ((env (test-expansion-env))
+        (nshell.domain.expansion:*positional-args* '("alpha" "beta" "gamma")))
+    (is (string= "alpha beta gamma" (nshell.domain.expansion:expand-variables "$argv" env)))
+    (is (string= "alpha" (nshell.domain.expansion:expand-variables "$argv[1]" env)))
+    (is (string= "gamma" (nshell.domain.expansion:expand-variables "$argv[3]" env)))
+    (is (string= "" (nshell.domain.expansion:expand-variables "$argv[5]" env)))
+    (is (string= "x-beta-y" (nshell.domain.expansion:expand-variables "x-$argv[2]-y" env))))
+  (let ((env (test-expansion-env)))
+    ;; With no args bound, $argv expands to empty; $1 stays literal (fish).
+    (is (string= "" (nshell.domain.expansion:expand-variables "$argv" env)))
+    (is (string= "$1" (nshell.domain.expansion:expand-variables "$1" env)))))
+
 (test double-quoted-expands-arithmetic
   "Arithmetic $((...)) is evaluated inside double quotes (POSIX)."
   (let ((env (test-expansion-env)))            ; FOO = bar

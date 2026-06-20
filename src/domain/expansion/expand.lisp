@@ -235,9 +235,32 @@ themselves variable-expanded. The := assignment side effect is not performed."
                (#\/ (%param-substitute value (subseq rest 1) env))
                (t (concatenate 'string value rest)))))))))
 
+(defvar *positional-args* nil
+  "List of function arguments used to expand the fish-style $argv and $argv[N].
+Bound dynamically by the function-call machinery for the duration of a function
+body; NIL at top level.")
+
+(defun %argv-index-ref (input end len)
+  "If INPUT has an [N] index immediately after a name ending at END, return
+\(values element-string next-index); otherwise (values NIL END). N is 1-based."
+  (if (and (< end len) (char= (char input end) #\[))
+      (let ((close (position #\] input :start (1+ end))))
+        (if close
+            (let ((n (ignore-errors
+                       (parse-integer input :start (1+ end) :end close
+                                            :junk-allowed nil))))
+              (if (and n (plusp n))
+                  (values (or (nth (1- n) *positional-args*) "") (1+ close))
+                  (values "" (1+ close))))
+            (values nil end)))
+      (values nil end)))
+
 (defun expand-variables (input env)
-  "Expand $VAR and ${VAR} occurrences in INPUT using ENV.
-Undefined variables expand to the empty string."
+  "Expand $VAR and ${VAR} occurrences in INPUT using ENV. Also expands the
+fish-style argument list $argv and indexed $argv[N] from *POSITIONAL-ARGS*
+\(bare $argv joins with spaces here; a bare unquoted $argv is split into separate
+words by the argument expander). POSIX positional $1..$9 are NOT special and stay
+literal, matching fish. Undefined variables expand to the empty string."
   (with-output-to-string (out)
     (loop with len = (length input)
           for i from 0 below len
@@ -255,12 +278,21 @@ Undefined variables expand to the empty string."
                         (setf i end))
                       (write-char ch out))))
                ((variable-name-start-p (char input (1+ i)))
-                (let ((start (1+ i))
-                      (end (loop for j from (1+ i) below len
-                                 while (variable-name-char-p (char input j))
-                                 finally (return j))))
-                  (write-string (or (nshell.domain.environment:env-get env (subseq input start end)) "") out)
-                  (setf i (1- end))))
+                (let* ((start (1+ i))
+                       (end (loop for j from (1+ i) below len
+                                  while (variable-name-char-p (char input j))
+                                  finally (return j)))
+                       (name (subseq input start end)))
+                  (cond
+                    ((string= name "argv")
+                     (multiple-value-bind (element next) (%argv-index-ref input end len)
+                       (cond
+                         (element (write-string element out) (setf i (1- next)))
+                         (t (write-string (format nil "~{~a~^ ~}" *positional-args*) out)
+                            (setf i (1- end))))))
+                    (t
+                     (write-string (or (nshell.domain.environment:env-get env name) "") out)
+                     (setf i (1- end))))))
                (t (write-char ch out))))))
 
 (defun starts-with-p (prefix string)

@@ -33,7 +33,7 @@
         {
           default = pkgs.sbcl.buildASDFSystem {
             pname = "nshell";
-            version = "0.2.2";
+            version = "0.3.0";
             src = src;
             systems = [ "nshell" ];
             lispLibs = [];
@@ -68,7 +68,7 @@
 
           test = pkgs.sbcl.buildASDFSystem {
             pname = "nshell-test";
-            version = "0.2.2";
+            version = "0.3.0";
             src = src;
             systems = [ "nshell/test" ];
             lispLibs = [ pkgs.sbclPackages.fiveam ];
@@ -93,7 +93,7 @@
         # Run the full test suite (332 tests)
         test = pkgs.sbcl.buildASDFSystem {
           pname = "nshell-test-check";
-          version = "0.2.2";
+          version = "0.3.0";
           src = src;
           systems = [ "nshell/test" ];
           lispLibs = [ pkgs.sbclPackages.fiveam ];

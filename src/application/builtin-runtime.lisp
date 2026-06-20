@@ -382,7 +382,9 @@
     (let ((handler (lookup-builtin command)))
       (cond
         (function-present-p
-         (%source-lines context function-body))
+         ;; Expose the call arguments to the function body as $argv / $argv[N].
+         (let ((nshell.domain.expansion:*positional-args* args))
+           (%source-lines context function-body)))
         (handler
          (funcall handler context args))
         (t

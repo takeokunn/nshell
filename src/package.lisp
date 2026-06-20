@@ -99,7 +99,7 @@
   (:export #:*glob-directory-files-fn* #:*glob-subdirectories-fn*
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all
            #:expand-double-quoted #:expand-arithmetic #:evaluate-arithmetic
-           #:expand-braces))
+           #:expand-braces #:*positional-args*))
 
   (defpackage #:nshell.domain.completion
   (:use #:cl)

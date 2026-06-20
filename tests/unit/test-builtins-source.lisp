@@ -185,6 +185,26 @@
     (is (= 0 code))
     (is (string= (format nil "(echo nope)~%") output))))
 
+(test function-receives-arguments-via-argv
+  "A called function sees its arguments through $argv (forwarded as words)."
+  (with-builtins-source (output code context
+                                 '("function greet"
+                                   "echo hi $argv"
+                                   "end"
+                                   "greet world and friends"))
+    (is (= 0 code))
+    (is (string= (format nil "hi world and friends~%") output))))
+
+(test function-argv-indexing-selects-single-argument
+  "$argv[N] selects the Nth (1-based) argument inside a function body."
+  (with-builtins-source (output code context
+                                 '("function pick"
+                                   "echo got $argv[2]"
+                                   "end"
+                                   "pick one two three"))
+    (is (= 0 code))
+    (is (string= (format nil "got two~%") output))))
+
 (test source-for-loop-expands-command-substitution-values
   "source lets fish-style for loops iterate over command substitution lines."
   (with-builtins-source (output code context
