@@ -23,7 +23,7 @@ jobs:
           - os: ubuntu-latest   # x86_64-linux
           - os: macos-14        # aarch64-darwin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
@@ -39,7 +39,7 @@ jobs:
     name: integration tests (full OS environment)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
@@ -63,7 +63,7 @@ jobs:
           - os: ubuntu-latest
           - os: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
