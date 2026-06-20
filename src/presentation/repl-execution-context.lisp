@@ -22,6 +22,7 @@
 
 (defparameter +repl-redirect-fns+
   (list :redirect-output #'nshell.infrastructure.acl:redirect-output
+        :redirect-error #'nshell.infrastructure.acl:redirect-error
         :redirect-input #'nshell.infrastructure.acl:redirect-input
         :restore #'nshell.infrastructure.acl:restore-redirects))
 

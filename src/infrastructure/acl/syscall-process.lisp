@@ -27,7 +27,7 @@
                     (proc (sb-ext:run-program cmd args
                             :input input
                             :output output
-                            :error :output
+                            :error (if *redirected-stderr* *error-output* :output)
                             :wait nil
                             :search t
                             :environment (%get-environment))))
@@ -49,7 +49,7 @@
       (let ((proc (sb-ext:run-program cmd args
                     :input *standard-input*
                     :output :stream
-                    :error :output
+                    :error (if *redirected-stderr* *error-output* :output)
                     :wait t
                     :search t
                     :environment (%get-environment))))
@@ -70,7 +70,7 @@
       (let ((proc (sb-ext:run-program cmd args
                     :input *standard-input*
                     :output :stream
-                    :error :output
+                    :error (if *redirected-stderr* *error-output* :output)
                     :wait nil
                     :search t
                     :environment (%get-environment))))

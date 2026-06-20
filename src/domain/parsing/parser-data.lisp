@@ -3,7 +3,18 @@
 (defparameter +redirect-specs+
   '((">" . :>)
     (">>" . :>>)
-    ("<" . :<)))
+    ("<" . :<)
+    ("1>" . :>)
+    ("1>>" . :>>)
+    ("2>" . :2>)
+    ("2>>" . :2>>)
+    ("2>&1" . :2>&1)
+    ("&>" . :&>)
+    ("&>>" . :&>>)))
+
+(defparameter +redirect-fd-dup-specs+
+  '(:2>&1)
+  "Redirect specs that duplicate a descriptor and so take no file target.")
 
 (defparameter +separator-rules+
   '((:pipe :token-type :pipe :text "|" :continues t)

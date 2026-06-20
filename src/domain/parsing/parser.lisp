@@ -76,7 +76,11 @@
                (%record-missing-redirect-target state)
                (push (cons (token-value tok) nil)
                      (%token-reduction-state-current-args state))
-               (setf (%token-reduction-state-pending-redirect-token state) tok))
+               ;; fd-dup redirects (e.g. 2>&1) are self-contained and need no
+               ;; following target, so they do not start a pending redirect.
+               (let ((spec (assoc (token-value tok) +redirect-specs+ :test #'string=)))
+                 (unless (and spec (member (cdr spec) +redirect-fd-dup-specs+))
+                   (setf (%token-reduction-state-pending-redirect-token state) tok))))
              (push (%token-diagnostic
                     :missing-command
                     (format nil "Expected command before '~a'" (token-value tok))

@@ -272,10 +272,38 @@
   (%tokenizer-state-advance state))
 
 (defun %tokenizer-handle-ampersand (state)
-  (if (and (%tokenizer-state-peek state 1)
-           (char= (%tokenizer-state-peek state 1) #\&))
-      (%tokenizer-state-emit-token state :and "&&")
-      (%tokenizer-state-emit-token state :ampersand "&")))
+  (let ((next (%tokenizer-state-peek state 1)))
+    (cond
+      ((eql next #\&) (%tokenizer-state-emit-token state :and "&&"))
+      ;; &> and &>> redirect both stdout and stderr to a file.
+      ((eql next #\>)
+       (if (eql (%tokenizer-state-peek state 2) #\>)
+           (%tokenizer-state-emit-token state :redirect "&>>")
+           (%tokenizer-state-emit-token state :redirect "&>")))
+      (t (%tokenizer-state-emit-token state :ampersand "&")))))
+
+(defun %tokenizer-read-fd-redirect (state)
+  "Read a file-descriptor-prefixed redirect such as 2>, 2>>, 1>, or 2>&1.
+The current character is a single digit immediately followed by > or <."
+  (let* ((start (tokenizer-state-pos state))
+         (fd (%tokenizer-state-take state))
+         (op (%tokenizer-state-take state))
+         (value (coerce (list fd op) 'string)))
+    (cond
+      ;; N>&M : duplicate one descriptor onto another (e.g. 2>&1).
+      ((and (char= op #\>)
+            (eql (%tokenizer-state-peek state) #\&)
+            (let ((d (%tokenizer-state-peek state 1)))
+              (and d (digit-char-p d))))
+       (setf value (concatenate 'string value "&"
+                                (string (%tokenizer-state-peek state 1))))
+       (%tokenizer-state-advance state 2))
+      ;; N>> : append.
+      ((and (char= op #\>) (eql (%tokenizer-state-peek state) #\>))
+       (setf value (concatenate 'string value ">"))
+       (%tokenizer-state-advance state)))
+    (%tokenizer-state-push-token state :redirect value start
+                                 (tokenizer-state-pos state))))
 
 (defun %tokenizer-handle-pipe (state)
   (if (and (%tokenizer-state-peek state 1)
@@ -353,6 +381,12 @@
                     (%tokenizer-handle-single-quote state))
                    ((char= ch #\")
                     (%tokenizer-handle-double-quote state))
+                   ;; A digit glued directly to > or < is an fd redirect
+                   ;; (2>file, 1>>log, 2>&1) rather than an argument word.
+                   ((and (digit-char-p ch)
+                         (member (%tokenizer-state-peek state 1) '(#\> #\<)
+                                 :test #'eql))
+                    (%tokenizer-read-fd-redirect state))
                    ((shell-operator-separator-p ch)
                     (%tokenizer-handle-special-character state ch))
                    (t (%tokenizer-read-word state)))))

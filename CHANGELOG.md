@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- File-descriptor redirections: `2>file` / `2>>file` (stderr to a file),
+  `2>&1` (merge stderr into stdout), and `&>file` / `&>>file` (both streams to
+  a file), plus explicit `1>` / `1>>`. Works for single commands and pipeline
+  stages. The default (no stderr redirect) behavior is unchanged.
 - POSIX command substitution `$(command)` in addition to the existing
   fish-style `(command)`. The tokenizer now keeps `$(...)` and `$((...))`
   attached to surrounding word characters (quote/escape aware), so

@@ -61,7 +61,7 @@
            #:shell-input-blank-p
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
-           #:+redirect-specs+
+           #:+redirect-specs+ #:+redirect-fd-dup-specs+
            #:token-type #:token-value #:token-start #:token-end #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
            #:make-argument-node #:make-operator-node #:make-error-node
@@ -197,7 +197,7 @@
   (:export #:*exported-environment*
            #:spawn-command #:spawn-pipeline #:spawn-pipeline-async #:wait-job
             #:spawn-async
-            #:kill-process #:os-signal->domain #:redirect-output #:redirect-input #:restore-redirects #:domain-signal->os
+            #:kill-process #:os-signal->domain #:redirect-output #:redirect-error #:redirect-input #:restore-redirects #:domain-signal->os
             #:install-signal-handlers
             #:open-pty #:with-pty #:pty-read #:pty-write #:pty-close #:make-pty-stream
             #:pty-spawn #:pty-process #:pty-process-p #:pty-process-pid

@@ -25,6 +25,20 @@
             (:incomplete
              (parse-error-result result)))))))
 
+(defun %pipeline-stderr-spec (redirects)
+  "Return (values KIND TARGET MODE) for stderr in a pipeline stage: :MERGE (into
+stdout), :FILE with TARGET/MODE, or NIL when stderr is not redirected."
+  (let ((redirect (find-if (lambda (r)
+                             (member (car r) '(:2> :2>> :2>&1 :&> :&>>)))
+                           redirects :from-end t)))
+    (when redirect
+      (case (car redirect)
+        (:2>&1 (values :merge nil nil))
+        (:2>   (values :file (cdr redirect) :supersede))
+        (:2>>  (values :file (cdr redirect) :append))
+        (:&>   (values :file (cdr redirect) :supersede))
+        (:&>>  (values :file (cdr redirect) :append))))))
+
 (defun %execute-external-pipeline-stage (command-node input redirects)
   (let* ((command (nshell.domain.parsing:command-node-command command-node))
          (args (%line-command-args command-node))
@@ -38,24 +52,43 @@
                                :if-does-not-exist :error)))
                   (input (make-string-input-stream input))
                   (t *standard-input*))))
-    (handler-case
-        (unwind-protect
-             (let ((process
-                     (sb-ext:run-program command args
-                                         :input stdin
-                                         :output :stream
-                                         :error :output
-                                         :wait nil
-                                         :search t)))
-               (let ((output (%read-stream-to-string (sb-ext:process-output process))))
-                 (sb-ext:process-wait process)
-                 (values (and (not (%write-redirected-stage-output redirects output))
-                              output)
-                         (or (sb-ext:process-exit-code process) 0))))
-          (when opened-input
-            (close opened-input)))
-      (error (condition)
-        (values (format nil "nshell: ~a: ~a~%" command condition) 127)))))
+    (multiple-value-bind (stderr-kind stderr-target stderr-mode)
+        (%pipeline-stderr-spec redirects)
+      (handler-case
+          (unwind-protect
+               (let ((process
+                       (sb-ext:run-program command args
+                                           :input stdin
+                                           :output :stream
+                                           ;; Default and 2>&1 keep stderr merged
+                                           ;; into the captured stdout; a file
+                                           ;; redirect captures stderr separately.
+                                           :error (if (eq stderr-kind :file) :stream :output)
+                                           :wait nil
+                                           :search t)))
+                 (let ((output (%read-stream-to-string (sb-ext:process-output process)))
+                       (errout (when (eq stderr-kind :file)
+                                 (%read-stream-to-string (sb-ext:process-error process))))
+                       (stdout-target (%output-redirect-spec redirects)))
+                   (sb-ext:process-wait process)
+                   (let ((stdout-written (%write-redirected-stage-output redirects output)))
+                     (when (eq stderr-kind :file)
+                       ;; When stderr shares the stdout file (&>), append after
+                       ;; the stdout content rather than truncating it.
+                       (let ((mode (if (and stdout-target (equal stderr-target stdout-target))
+                                       :append
+                                       stderr-mode)))
+                         (with-open-file (stream stderr-target
+                                                 :direction :output
+                                                 :if-exists mode
+                                                 :if-does-not-exist :create)
+                           (write-string (or errout "") stream))))
+                     (values (and (not stdout-written) output)
+                             (or (sb-ext:process-exit-code process) 0)))))
+            (when opened-input
+              (close opened-input)))
+        (error (condition)
+          (values (format nil "nshell: ~a: ~a~%" command condition) 127))))))
 
 (defun %execute-pipeline-stage-in-context (context command-node input redirects)
   (if (%shell-internal-command-p context command-node)
@@ -104,16 +137,27 @@
 
 (defun %output-redirect-p (redirects)
   (find-if (lambda (redirect)
-             (member (car redirect) '(:> :>>)))
+             (member (car redirect) '(:> :>> :&> :&>>)))
            redirects))
 
 (defun %apply-context-redirects (context redirects)
   (dolist (redirect redirects)
     (let ((target (cdr redirect)))
-      (ecase (car redirect)
+      (case (car redirect)
         (:> (funcall (%redirect-fn context :redirect-output) target :supersede))
         (:>> (funcall (%redirect-fn context :redirect-output) target :append))
-        (:< (funcall (%redirect-fn context :redirect-input) target))))))
+        ;; &> / &>> : stdout to the file; stderr follows via the default
+        ;; merge-into-stdout behavior in the process adapters.
+        (:&> (funcall (%redirect-fn context :redirect-output) target :supersede))
+        (:&>> (funcall (%redirect-fn context :redirect-output) target :append))
+        ;; 2> / 2>> : stderr to its own file.
+        (:2> (let ((fn (%redirect-fn context :redirect-error)))
+               (when fn (funcall fn target :supersede))))
+        (:2>> (let ((fn (%redirect-fn context :redirect-error)))
+                (when fn (funcall fn target :append))))
+        (:< (funcall (%redirect-fn context :redirect-input) target))
+        ;; 2>&1 is the default (stderr merged into stdout); nothing to apply.
+        (t nil)))))
 
 (defun %restore-context-redirects (context)
   (let ((restore (%redirect-fn context :restore)))

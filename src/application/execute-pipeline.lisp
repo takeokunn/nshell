@@ -50,13 +50,18 @@
           for arg = (nth index args)
           for value = (nshell.domain.parsing:arg-value arg)
           for spec = (assoc value nshell.domain.parsing:+redirect-specs+ :test #'string=)
-          do (if (and spec (< (1+ index) limit))
-                 (let ((target (nshell.domain.parsing:arg-value (nth (1+ index) args))))
-                   (push (cons (cdr spec) target) redirects)
-                   (incf index 2))
-                 (progn
-                   (push arg clean)
-                   (incf index))))
+          do (cond
+               ;; fd-dup redirects (e.g. 2>&1) take no following file target.
+               ((and spec (member (cdr spec) nshell.domain.parsing:+redirect-fd-dup-specs+))
+                (push (cons (cdr spec) nil) redirects)
+                (incf index))
+               ((and spec (< (1+ index) limit))
+                (let ((target (nshell.domain.parsing:arg-value (nth (1+ index) args))))
+                  (push (cons (cdr spec) target) redirects)
+                  (incf index 2)))
+               (t
+                (push arg clean)
+                (incf index))))
     (values (nshell.domain.parsing:make-command-node
              (nshell.domain.parsing:command-node-command cmd-node)
              (nreverse clean))
@@ -77,12 +82,12 @@
 
 (defun %output-redirect-spec (redirects)
   (let ((redirect (find-if (lambda (redirect)
-                             (member (car redirect) '(:> :>>)))
+                             (member (car redirect) '(:> :>> :&> :&>>)))
                            redirects
                            :from-end t)))
     (when redirect
       (values (cdr redirect)
-              (if (eq (car redirect) :>>) :append :supersede)))))
+              (if (member (car redirect) '(:>> :&>>)) :append :supersede)))))
 
 (defun %write-redirected-stage-output (redirects output)
   (multiple-value-bind (target mode)

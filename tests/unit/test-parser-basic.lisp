@@ -8,6 +8,18 @@
     (is (string= "ls" (nshell.domain.parsing:command-node-command ast)))
     (is (equal '("-la") (nshell.domain.parsing:command-node-args ast)))))
 
+(test parse-fd-redirects-tokenize-and-need-no-spurious-target
+  "fd-prefixed and combined redirects parse cleanly; 2>&1 needs no file target."
+  (with-complete-command-line (result ast "cat x 2>err.txt")
+    (is (null (nshell.domain.parsing:parse-errors result)))
+    (is (string= "cat" (nshell.domain.parsing:command-node-command ast))))
+  (with-complete-command-line (result ast "cat x 2>&1")
+    (is (null (nshell.domain.parsing:parse-errors result)))
+    (is (string= "cat" (nshell.domain.parsing:command-node-command ast))))
+  (with-complete-command-line (result ast "make &>build.log")
+    (is (null (nshell.domain.parsing:parse-errors result)))
+    (is (string= "make" (nshell.domain.parsing:command-node-command ast)))))
+
 (test parse-keeps-dollar-substitutions-attached-to-word
   "$( ) and $(( )) stay attached to surrounding word characters as one argument."
   (with-complete-ast (ast "echo a$((1+2))b")
