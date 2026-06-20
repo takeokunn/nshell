@@ -171,6 +171,26 @@
     (loop while (< (tokenizer-state-pos state) (tokenizer-state-len state))
           for ch = (%tokenizer-state-peek state)
           do (cond
+               ;; Keep $( ... ) and $(( ... )) attached to the surrounding word so
+               ;; command substitution and arithmetic expansion can be applied
+               ;; during expansion instead of the parens splitting the word.
+               ((and (char= ch #\$)
+                     (eql (%tokenizer-state-peek state 1) #\()
+                     (%tokenizer-balanced-substitution-end
+                      state (1+ (tokenizer-state-pos state))))
+                (push (%tokenizer-state-take state) chars) ; the $
+                (let ((depth 0) (quote nil) (escaped nil))
+                  (loop for c = (%tokenizer-state-peek state)
+                        while c
+                        do (push (%tokenizer-state-take state) chars)
+                           (cond (escaped (setf escaped nil))
+                                 ((char= c #\\) (setf escaped t))
+                                 (quote (when (char= c quote) (setf quote nil)))
+                                 ((or (char= c #\') (char= c #\")) (setf quote c))
+                                 ((char= c #\() (incf depth))
+                                 ((char= c #\))
+                                  (decf depth)
+                                  (when (zerop depth) (return)))))))
                ((or (char= ch #\Space) (char= ch #\Tab)
                     (char= ch #\Newline)
                     (char= ch #\|) (char= ch #\>)

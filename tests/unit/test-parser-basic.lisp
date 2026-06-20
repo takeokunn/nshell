@@ -8,6 +8,15 @@
     (is (string= "ls" (nshell.domain.parsing:command-node-command ast)))
     (is (equal '("-la") (nshell.domain.parsing:command-node-args ast)))))
 
+(test parse-keeps-dollar-substitutions-attached-to-word
+  "$( ) and $(( )) stay attached to surrounding word characters as one argument."
+  (with-complete-ast (ast "echo a$((1+2))b")
+    (is (equal '("a$((1+2))b")
+               (nshell.domain.parsing:command-node-arg-values ast))))
+  (with-complete-ast (ast "echo $(echo hi)")
+    (is (equal '("$(echo hi)")
+               (nshell.domain.parsing:command-node-arg-values ast)))))
+
 (test parse-records-quote-style-per-argument
   "Single and double quotes are distinguished so expansion can treat them differently."
   (with-complete-ast (ast "echo plain \"$FOO\" '*'")

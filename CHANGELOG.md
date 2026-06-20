@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- POSIX command substitution `$(command)` in addition to the existing
+  fish-style `(command)`. The tokenizer now keeps `$(...)` and `$((...))`
+  attached to surrounding word characters (quote/escape aware), so
+  `a$((1+2))b`, `"$(cmd)"`, and `pre$(echo ")")post` all parse and expand
+  correctly. This also makes `$((expr))` arithmetic work end-to-end (previously
+  it was eaten by the command-substitution scanner before the arithmetic pass).
 - Brace expansion: comma lists `{a,b,c}` and ranges `{1..5}` / `{a..e}`,
   including nested and adjacent (cartesian) groups. A group with no top-level
   comma or valid range is left literal, matching shell behavior.

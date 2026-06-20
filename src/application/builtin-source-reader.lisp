@@ -123,25 +123,69 @@
           (:incomplete
            (%source-substitution-fallback source))))))
 
+(defun %append-command-substitution-string (parts string)
+  (mapcar (lambda (part) (concatenate 'string part string)) parts))
+
+(defun %paren-balanced-end (value start)
+  "VALUE/START point at an opening #\(. Return the index just past the paren that
+returns depth to zero, or NIL when unbalanced."
+  (let ((depth 0))
+    (loop for index from start below (length value)
+          for ch = (char value index)
+          do (cond ((char= ch #\() (incf depth))
+                   ((char= ch #\)) (decf depth)
+                    (when (zerop depth) (return (1+ index))))))))
+
+(defun %command-sub-fields-at (context value open-paren)
+  "Run the command substitution whose opening #\( is at OPEN-PAREN and return
+its output fields, or NIL when the parens are empty/unbalanced."
+  (let ((end (%command-substitution-end value open-paren)))
+    (when (and end (> end (1+ open-paren)))
+      (values (%execute-command-substitution-fields
+               context (subseq value (1+ open-paren) end))
+              (1+ end)))))
+
 (defun %expand-command-substitutions (context value)
-  (labels ((walk (pos parts)
-             (if (>= pos (length value))
-                 parts
-                 (let ((ch (char value pos)))
-                   (if (char= ch #\()
-                       (let ((end (%command-substitution-end value pos)))
-                         (if (and end (> end (1+ pos)))
-                             (walk (1+ end)
-                                   (%append-command-substitution-fields
-                                    parts
-                                    (%execute-command-substitution-fields
-                                     context
-                                     (subseq value (1+ pos) end))))
-                             (walk (1+ pos)
-                                   (%append-command-substitution-char parts ch))))
-                       (walk (1+ pos)
-                             (%append-command-substitution-char parts ch)))))))
-    (walk 0 (list ""))))
+  "Expand command substitutions in VALUE: fish-style (cmd) and POSIX $(cmd).
+Arithmetic $((expr)) is passed through untouched so the arithmetic expander can
+handle it later."
+  (let ((len (length value)))
+    (labels ((walk (pos parts)
+               (if (>= pos len)
+                   parts
+                   (let ((ch (char value pos)))
+                     (cond
+                       ;; $(( ... )) -> leave intact for arithmetic expansion.
+                       ((and (char= ch #\$) (< (+ pos 2) len)
+                             (char= (char value (1+ pos)) #\()
+                             (char= (char value (+ pos 2)) #\())
+                        (let ((end (%paren-balanced-end value (1+ pos))))
+                          (if end
+                              (walk end (%append-command-substitution-string
+                                         parts (subseq value pos end)))
+                              (walk (1+ pos)
+                                    (%append-command-substitution-char parts ch)))))
+                       ;; $( ... ) POSIX command substitution.
+                       ((and (char= ch #\$) (< (1+ pos) len)
+                             (char= (char value (1+ pos)) #\())
+                        (multiple-value-bind (fields next)
+                            (%command-sub-fields-at context value (1+ pos))
+                          (if next
+                              (walk next (%append-command-substitution-fields parts fields))
+                              (walk (1+ pos)
+                                    (%append-command-substitution-char parts ch)))))
+                       ;; bare ( ... ) fish-style command substitution.
+                       ((char= ch #\()
+                        (multiple-value-bind (fields next)
+                            (%command-sub-fields-at context value pos)
+                          (if next
+                              (walk next (%append-command-substitution-fields parts fields))
+                              (walk (1+ pos)
+                                    (%append-command-substitution-char parts ch)))))
+                       (t
+                        (walk (1+ pos)
+                              (%append-command-substitution-char parts ch))))))))
+      (walk 0 (list "")))))
 
 (defun %expand-source-arg-in-context (context arg)
   (let ((value (nshell.domain.parsing:arg-value arg))
