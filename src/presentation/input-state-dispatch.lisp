@@ -29,8 +29,10 @@
                 :search-index 0)
                :search-start)))
     ((:ctrl-f :right) (accept-suggestion-at-eol state))
-    ((:ctrl-g :escape) (values (clear-completion-session-state state)
-                               :redraw))
+    (:escape (if *vi-mode-enabled*
+                 (values (vi-enter-command-mode state) :redraw)
+                 (values (clear-completion-session-state state) :redraw)))
+    (:ctrl-g (values (clear-completion-session-state state) :redraw))
     ((:ctrl-b :left) (move-cursor-clearing-suggestion state -1))
     ((:ctrl-a :home) (move-cursor-to-clearing-suggestion state 0))
     ((:ctrl-e :end)

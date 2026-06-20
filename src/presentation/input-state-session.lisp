@@ -41,9 +41,10 @@ keyword for the impure REPL shell to interpret. This function performs no I/O
   and mutates neither STATE nor KEY-EVENT."
   (with-normalized-input-state (state state)
     (multiple-value-bind (new-state output)
-        (if (eq (input-state-mode state) :search)
-            (reduce-search-input-state state key-event)
-            (reduce-insert-input-state state key-event))
+        (case (input-state-mode state)
+          (:search (reduce-search-input-state state key-event))
+          ((:vi-command :vi-d :vi-c) (reduce-vi-input-state state key-event))
+          (t (reduce-insert-input-state state key-event)))
       (let ((final-state (finalize-input-state-transition state new-state key-event)))
         (values (record-undo-transition state final-state output key-event)
                 output)))))

@@ -5,9 +5,14 @@
 (defconstant +max-input-buffer-size+ 4096
   "Maximum editable input buffer length accepted by `reduce-input-state'.")
 
+(defvar *vi-mode-enabled* nil
+  "When true, the line editor uses vi key bindings: ESC leaves insert mode for
+vi normal mode. Set from configuration or the NSHELL_VI_MODE environment.")
+
 (deftype input-mode ()
-  "Input reducer modes."
-  '(member :insert :search))
+  "Input reducer modes. :VI-COMMAND is vi normal mode; :VI-D and :VI-C are the
+transient operator-pending states after pressing d or c in normal mode."
+  '(member :insert :search :vi-command :vi-d :vi-c))
 
 (deftype output-event ()
   "Events emitted by `reduce-input-state' for an outer, effectful REPL loop."

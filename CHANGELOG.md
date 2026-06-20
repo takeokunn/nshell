@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Vi key bindings (opt-in via `NSHELL_VI_MODE=1`): `ESC` enters vi normal mode,
+  with motions (`h l 0 ^ $ w b e`), insert entries (`i a I A`), edits
+  (`x D C s`), operators (`dd cc dw cw d$ d0` and the `c` equivalents), and
+  `j` / `k` for history. The default editor remains Emacs-style.
 - File-descriptor redirections: `2>file` / `2>>file` (stderr to a file),
   `2>&1` (merge stderr into stdout), and `&>file` / `&>>file` (both streams to
   a file), plus explicit `1>` / `1>>`. Works for single commands and pipeline

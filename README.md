@@ -31,6 +31,8 @@ build.
   filesystem completion, with common-prefix `Tab` extension and a candidate menu.
 - **Rich line editing** — Emacs keybindings, kill-ring & yank, multi-level
   undo/redo, multiline editing, and incremental history search (`Ctrl-R`).
+  Optional **vi key bindings** (`NSHELL_VI_MODE=1`): normal-mode motions,
+  operators (`dd`, `cw`, …), and insert/append.
 - **Configurable prompt** — hostname, working directory, git branch/dirty
   status, command duration, and exit code, with theming.
 - **Job control** — background jobs (`&`), `jobs`, `fg`, `bg`, `disown`.
@@ -139,12 +141,14 @@ Unit, integration, property-based, and end-to-end (PTY) tests live under
 
 nshell is converging on world-class interactive-shell parity. Near-term focus:
 
-- **Shell language depth** — command substitution `$(...)`, parameter expansion
-  (`${VAR:-default}`, `##`, `%%`, …), arithmetic `$((...))`, here-docs, full fd
-  redirections (`2>`, `2>&1`, `&>`), and `$status`/positional parameters.
+- **Shell language depth** — remaining parameter-expansion forms (`##`, `%%`,
+  pattern substitution), here-docs, and positional/`$argv` parameters.
+  (Quoting, `${VAR:-default}`, arithmetic `$((...))`, brace expansion, command
+  substitution `$(...)`/`(...)`, and fd redirections `2>`/`2>&1`/`&>` are done.)
 - **Job control hardening** — robust foreground process-group handling so
   `Ctrl-C` / `Ctrl-Z` reliably interrupt and suspend pipelines.
-- **Editor parity** — vi-mode, visual selection, and numeric arguments.
+- **Editor parity** — visual selection and numeric arguments (vi-mode and
+  Emacs bindings are done).
 - **Distribution** — nixpkgs, Homebrew, and prebuilt release binaries.
 
 See [CHANGELOG.md](./CHANGELOG.md) for released changes.
