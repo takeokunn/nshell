@@ -1,6 +1,6 @@
 (in-package #:nshell.presentation)
 
-(defun %repl-filesystem-fns ()
+(defparameter +repl-filesystem-fns+
   (list :cwd #'uiop:getcwd
         :list-dir (lambda (dir) (uiop:directory-files dir))
         :chdir #'uiop:chdir
@@ -12,7 +12,7 @@
         :directory-exists-p (lambda (path)
                               (not (null (uiop:directory-exists-p path))))))
 
-(defun %repl-process-fns ()
+(defparameter +repl-process-fns+
   (list :run-external
         (lambda (command args)
           (nshell.infrastructure.acl:run-external command args))
@@ -20,7 +20,7 @@
         (lambda (command args)
           (nshell.infrastructure.acl:run-external-capture command args))))
 
-(defun %repl-redirect-fns ()
+(defparameter +repl-redirect-fns+
   (list :redirect-output #'nshell.infrastructure.acl:redirect-output
         :redirect-input #'nshell.infrastructure.acl:redirect-input
         :restore #'nshell.infrastructure.acl:restore-redirects))
@@ -36,9 +36,10 @@
    :alias-table *aliases*
    :abbreviation-table *abbreviations*
    :function-table *functions*
-   :filesystem-fns (%repl-filesystem-fns)
-   :process-fns (%repl-process-fns)
-   :redirect-fns (%repl-redirect-fns)
+   :function-source-table *function-sources*
+   :filesystem-fns +repl-filesystem-fns+
+   :process-fns +repl-process-fns+
+   :redirect-fns +repl-redirect-fns+
    :terminal-fns nil
    :running *running*
    :last-exit-code *last-exit-code*
@@ -50,17 +51,24 @@
         *aliases* (nshell.application:shell-context-alias-table context)
         *abbreviations* (nshell.application:shell-context-abbreviation-table context)
         *functions* (nshell.application:shell-context-function-table context)
+        *function-sources* (nshell.application:shell-context-function-source-table context)
         *running* (nshell.application:shell-context-running context)
         *last-exit-code* code
         *input-state* (nshell.application:shell-context-input-state context)
         *proc-registry* (nshell.application:shell-context-process-registry context))
   code)
 
-(defun %execute-foreground-ast-in-context (ast)
+(defun %execute-with-repl-shell-context (thunk)
   (let ((context (%make-repl-shell-context)))
     (multiple-value-bind (output code)
-        (nshell.application:execute-ast-in-context context ast)
+        (funcall thunk context)
       (%sync-repl-shell-context context (or code 0))
       (when output
         (write-string output))
-      (or code 0))))
+      (values output (or code 0)))))
+
+(defun %execute-foreground-ast-in-context (ast)
+  (nth-value 1
+             (%execute-with-repl-shell-context
+              (lambda (context)
+                (nshell.application:execute-ast-in-context context ast)))))

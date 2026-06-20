@@ -16,6 +16,58 @@
     (is (member "--help" (completion-texts candidates)
                 :test #'string=))))
 
+(test type-command-flags-are-completed
+  (let ((kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.presentation::seed-repl-completion-knowledge-base kb)
+    (let ((candidates (nshell.domain.completion:complete
+                       kb
+                       "type --")))
+      (is (member "--query" (completion-texts candidates)
+                  :test #'string=))
+      (is (member "--help" (completion-texts candidates)
+                  :test #'string=)))
+    (let ((candidates (nshell.domain.completion:complete
+                       kb
+                       "type -")))
+      (is (member "-q" (completion-texts candidates)
+                  :test #'string=))
+      (is (member "-t" (completion-texts candidates)
+                  :test #'string=)))))
+
+(test command-completion-includes-type
+  (let ((candidates (nshell.domain.completion:rule-complete
+                     nshell.domain.completion::*built-in-rule-knowledge-base*
+                     "ty")))
+    (is (member "type" (completion-texts candidates)
+                :test #'string=))
+    (is (string= "show command type"
+                 (nshell.domain.completion:candidate-description
+                  (completion-candidate-by-text "type" candidates))))))
+
+(test command-completion-includes-common-builtins
+  (dolist (case '(("he" "help" "show help")
+                  ("his" "history" "show and manage command history")
+                  ("str" "string" "manipulate strings")
+                  ("ec" "echo" "print arguments")
+                  ("pw" "pwd" "print working directory")
+                  ("ex" "exit" "exit the shell")
+                  ("so" "source" "execute commands from file")
+                  ("re" "read" "read line of input")
+                  ("fu" "function" "manage functions")
+                  ("co" "contains" "test whether a value is present")
+                  ("no" "not" "invert command status")))
+    (destructuring-bind (prefix text description) case
+      (let ((candidates (nshell.domain.completion:rule-complete
+                         nshell.domain.completion::*built-in-rule-knowledge-base*
+                         prefix)))
+        (is (member text (completion-texts candidates)
+                    :test #'string=)
+            prefix)
+        (is (string= description
+                     (nshell.domain.completion:candidate-description
+                      (completion-candidate-by-text text candidates)))
+            prefix)))))
+
 (test rule-completion-candidates-carry-descriptions
   (let* ((candidates (nshell.domain.completion:rule-complete
                       nshell.domain.completion::*built-in-rule-knowledge-base*

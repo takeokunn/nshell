@@ -3,44 +3,38 @@
 (in-package #:nshell.presentation)
 
 (defun move-word-left (state)
-  (let* ((state (normalize-input-state state))
-         (buffer (input-state-buffer state))
-         (pos (input-state-cursor-pos state))
-         (scan-limit pos))
-    (loop while (and (> scan-limit 0)
-                     (nshell.domain.parsing:shell-token-separator-p
-                      (char buffer (1- scan-limit))))
-          do (decf scan-limit))
-    (let ((ranges (shell-token-ranges-before buffer scan-limit)))
-      (if ranges
-          (move-cursor-to-clearing-suggestion state (caar (last ranges)))
-          (move-cursor-to-clearing-suggestion state 0)))))
+  (with-input-buffer (state buffer pos) state
+    (let ((scan-limit pos))
+      (loop while (and (> scan-limit 0)
+                       (nshell.domain.parsing:shell-token-separator-p
+                        (char buffer (1- scan-limit))))
+            do (decf scan-limit))
+      (let ((ranges (shell-token-ranges-before buffer scan-limit)))
+        (if ranges
+            (move-cursor-to-clearing-suggestion state (caar (last ranges)))
+            (move-cursor-to-clearing-suggestion state 0))))))
 
 (defun move-word-right (state)
-  (let* ((state (normalize-input-state state))
-         (buffer (input-state-buffer state))
-         (pos (input-state-cursor-pos state))
-         (end (length buffer)))
-    (if (and (< pos end)
-             (not (nshell.domain.parsing:shell-token-separator-p
-                   (char buffer pos))))
-        (multiple-value-bind (token-start token-end token-found-p)
-            (shell-token-range-at-position buffer pos)
-          (declare (ignore token-start))
-          (setf pos (if token-found-p
-                        token-end
-                        (shell-token-end buffer pos)))))
-    (loop while (and (< pos end)
-                     (nshell.domain.parsing:shell-token-separator-p
-                      (char buffer pos)))
-          do (incf pos))
-    (move-cursor-to-clearing-suggestion state pos)))
+  (with-input-buffer (state buffer pos) state
+    (let ((end (length buffer)))
+      (if (and (< pos end)
+               (not (nshell.domain.parsing:shell-token-separator-p
+                     (char buffer pos))))
+          (multiple-value-bind (token-start token-end token-found-p)
+              (shell-token-range-at-position buffer pos)
+            (declare (ignore token-start))
+            (setf pos (if token-found-p
+                          token-end
+                          (shell-token-end buffer pos)))))
+      (loop while (and (< pos end)
+                       (nshell.domain.parsing:shell-token-separator-p
+                        (char buffer pos)))
+            do (incf pos))
+      (move-cursor-to-clearing-suggestion state pos))))
 
 (defun transform-word-at-cursor (state transform)
   "Apply TRANSFORM to the shell token at or after the cursor."
-  (let* ((state (normalize-input-state state))
-         (buffer (input-state-buffer state))
-         (cursor (input-state-cursor-pos state)))
+  (with-buffer-edit (state buffer cursor) state
     (multiple-value-bind (start end found-p)
         (shell-token-range-at-or-after-cursor buffer cursor)
       (if (not found-p)
@@ -51,10 +45,8 @@
                                           (subseq buffer 0 start)
                                           new-word
                                           (subseq buffer end))))
-            (values (copy-input-state-clearing-completion state
-                     :buffer new-buffer
-                     :cursor-pos (+ start (length new-word)))
-                    :suggest-update))))))
+            (commit-buffer-edit new-buffer
+                                :cursor-pos (+ start (length new-word))))))))
 
 (defun capitalize-token-text (text)
   "Capitalize the first alphabetic character in TEXT and downcase the rest."
@@ -81,9 +73,7 @@
   (transform-word-at-cursor state #'capitalize-token-text))
 
 (defun transpose-words-around-cursor (state)
-  (let* ((state (normalize-input-state state))
-         (buffer (input-state-buffer state))
-         (cursor (input-state-cursor-pos state)))
+  (with-buffer-edit (state buffer cursor) state
     (multiple-value-bind (right-start right-end right-found-p)
         (shell-token-range-at-or-after-cursor buffer cursor)
       (if (not right-found-p)
@@ -106,7 +96,5 @@
                                       (length right-word)
                                       (length middle)
                                       (length left-word))))
-                  (values (copy-input-state-clearing-completion state
-                           :buffer new-buffer
-                           :cursor-pos new-cursor)
-                          :suggest-update))))))))
+                  (commit-buffer-edit new-buffer
+                                      :cursor-pos new-cursor))))))))

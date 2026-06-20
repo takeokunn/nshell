@@ -16,6 +16,7 @@
   (alias-table (make-hash-table :test #'equal) :type hash-table)
   (abbreviation-table (make-hash-table :test #'equal) :type hash-table)
   (function-table (make-hash-table :test #'equal) :type hash-table)
+  (function-source-table (make-hash-table :test #'equal) :type hash-table)
   (filesystem-fns nil :type list)
   (process-fns nil :type list)
   (terminal-fns nil :type list)

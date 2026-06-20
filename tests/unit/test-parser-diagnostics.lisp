@@ -88,3 +88,8 @@
                                 :kind :unterminated-process-substitution
                                 :span-start 4
                                 :span-end 13))))
+
+(test format-parse-diagnostic-lines
+  (with-parsed-command-line (result "echo |")
+    (is (equal '("nshell: syntax error: Expected command after '|' at column 6")
+               (nshell.presentation::format-parse-diagnostic-lines result)))))

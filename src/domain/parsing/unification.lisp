@@ -5,8 +5,6 @@
 
 (defun var-p (x) (logic-var-p x))
 
-(defun empty-bindings () '())
-
 (defun lookup-var (var bindings)
   (let ((pair (assoc var bindings :test #'eq)))
     (if pair

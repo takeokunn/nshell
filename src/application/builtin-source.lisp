@@ -1,23 +1,10 @@
 (in-package #:nshell.application)
 
-(defun %source-parse-error-message (result)
-  (format nil "source: parse error: ~{~a~^; ~}~%"
-          (nshell.domain.parsing:parse-errors result)))
-
-(defmacro %with-source-line-parse-result ((result ast line) &body body)
-  `(nshell.domain.parsing:with-parsed-command-line-case (,result ,ast ,line)
-     (:complete
-      ,@body)
-     (:error
-      (values (%source-parse-error-message ,result) 2))
-     (:incomplete
-      (values (%source-parse-error-message ,result) 2))))
-
 (defun %builtin-source (context args)
-    (if args
+  (if args
       (handler-case
           (with-open-file (stream (first args) :direction :input)
-            (%source-lines context (%collect-source-lines stream)))
+            (%source-lines context (%collect-source-lines stream) (first args)))
         (error (condition)
           (values (format nil "source: ~a: ~a~%" (first args) condition) 1)))
       (%builtin-usage "source" "source file")))
@@ -26,8 +13,17 @@
   (let ((trimmed (string-trim '(#\Space #\Tab #\Newline #\Return) line)))
     (if (string= trimmed "")
         (values nil 0)
-        (%with-source-line-parse-result (result ast trimmed)
-          (execute-ast-in-context context ast)))))
+        (labels ((parse-error-result (result)
+                   (values (format nil "source: parse error: ~a~%"
+                                   (nshell.domain.parsing:format-parse-error-messages result))
+                           2)))
+          (nshell.domain.parsing:with-parsed-command-line-case (result ast trimmed)
+            (:complete
+             (execute-ast-in-context context ast))
+            (:error
+             (parse-error-result result))
+            (:incomplete
+             (parse-error-result result)))))))
 
 (defun %execute-external-pipeline-stage (command-node input redirects)
   (let* ((command (nshell.domain.parsing:command-node-command command-node))
@@ -88,9 +84,10 @@
          (mapcar (lambda (command)
                    (%expand-command-node-in-context context command))
                  commands))
-      (if (some (lambda (command)
-                  (%shell-internal-command-p context command))
-                clean-commands)
+      (if (or (eq :cps (shell-context-execution-strategy context))
+              (some (lambda (command)
+                      (%shell-internal-command-p context command))
+                    clean-commands))
           (%execute-source-pipeline-in-context context clean-commands redirects)
           (let ((exit-code 0))
             (let ((output
@@ -249,10 +246,24 @@
 
 (defun %execute-sequence-node-in-context (context ast)
   (%with-output-code-accumulator (output code)
-    (dolist (command (nshell.domain.parsing:sequence-node-commands ast))
-      (%collect-execution-result
-       (output code)
-       (execute-ast-in-context context command)))))
+    (let* ((commands (nshell.domain.parsing:sequence-node-commands ast))
+           (separators (nshell.domain.parsing:sequence-node-separators ast)))
+      (loop for command in commands
+            for index from 0
+            for separator = (and (< index (length separators))
+                                 (nth index separators))
+            do (cond
+                 ((eq :amp separator)
+                  (%collect-execution-result
+                   (output code)
+                   (execute-ast-in-context context command)))
+                 (t
+                  (%collect-execution-result
+                   (output code)
+                   (execute-ast-in-context context command))
+                  (when (or (and (eq :and separator) (/= code 0))
+                            (and (eq :or separator) (= code 0)))
+                    (return))))))))
 
 (defun execute-ast-in-context (context ast)
   (cond

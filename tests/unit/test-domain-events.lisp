@@ -9,12 +9,13 @@
 (defmacro assert-event-types (&rest cases)
   `(progn
      ,@(loop for (event-form expected-type) in cases
-             collect `(is (nshell.domain.events:event-type-p ,event-form ,expected-type)))))
+             collect `(is (eq (nshell.domain.events:domain-event-type ,event-form)
+                              ,expected-type)))))
 
 (test event-creation
   "Domain events can be created with correct type"
   (let ((event (nshell.domain.events:make-domain-event :test-event)))
-    (is (nshell.domain.events:event-type-p event :test-event))
+    (is (eq (nshell.domain.events:domain-event-type event) :test-event))
     (is (integerp (nshell.domain.events:domain-event-timestamp event)))))
 
 (test command-events-have-correct-types

@@ -9,9 +9,6 @@
     (:variable "$ ")
     (otherwise "·")))
 
-(defun %display-width (string)
-  (%string-visible-width string))
-
 (defun %terminal-width ()
   (handler-case
       (multiple-value-bind (rows columns) (nshell.infrastructure.acl:get-terminal-size)
@@ -27,10 +24,18 @@
         (format nil "~a ~a  ~a" (%kind-icon kind) text description)
         (format nil "~a ~a" (%kind-icon kind) text))))
 
+(defun %pad-to-visible-width (text width)
+  (let ((visible-width (%string-visible-width text)))
+    (if (>= visible-width width)
+        text
+        (concatenate 'string text
+                     (make-string (- width visible-width)
+                                  :initial-element #\Space)))))
+
 (defun %compute-columns (candidates &key (terminal-width (%terminal-width)) (padding 2))
   (let* ((formatted (mapcar #'%format-candidate candidates))
          (max-width (if formatted
-                        (apply #'max (mapcar #'%display-width formatted))
+                        (apply #'max (mapcar #'%string-visible-width formatted))
                         1))
          (column-width (+ max-width padding))
          (columns (max 1 (floor terminal-width column-width))))
@@ -57,7 +62,7 @@
           (format t "~%")
           (loop for item in visible
                 for index from 0
-                do (let ((cell (format nil "~vA" column-width item)))
+                do (let ((cell (%pad-to-visible-width item column-width)))
                      (if (and (integerp selected-index)
                               (= index selected-index))
                          (format t "~C[7m~a~C[0m" #\Esc cell #\Esc)

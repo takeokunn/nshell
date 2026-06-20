@@ -1,9 +1,6 @@
 ;;; REPL command preparation helpers
 (in-package #:nshell.presentation)
 
-(defun %reap-before-builtin-p (command)
-  (not (null (member command '("fg" "bg" "jobs" "disown") :test #'string=))))
-
 (defun make-job-from-ast (ast text)
   (let* ((node (cond
                  ((or (nshell.domain.parsing:command-node-p ast)

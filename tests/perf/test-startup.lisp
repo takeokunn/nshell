@@ -12,13 +12,6 @@
     (/ (- (get-internal-real-time) start)
        internal-time-units-per-second)))
 
-(defun %current-sbcl-executable ()
-  (or (uiop:getenv "SBCL")
-      #+sbcl (when sb-ext:*runtime-pathname*
-               (namestring sb-ext:*runtime-pathname*))
-      #-sbcl nil
-      "sbcl"))
-
 (defun %test-startup-shell-context ()
   (let ((filesystem-fns (list :list-dir (lambda (dir)
                                           (declare (ignore dir))
@@ -63,7 +56,7 @@
 (test startup-cold-asdf-load-under-budget
   "A cold SBCL process can load the nshell system within an interactive budget."
   (let* ((root (asdf:system-source-directory :nshell))
-         (sbcl (%current-sbcl-executable))
+         (sbcl (current-sbcl-executable))
          (elapsed
            (%elapsed-real-seconds
             (lambda ()

@@ -11,8 +11,7 @@
 (defpackage #:nshell.domain.events
   (:use #:cl)
   (:export #:domain-event #:domain-event-p #:domain-event-type #:domain-event-timestamp
-           #:make-domain-event #:event-type #:event-timestamp
-           #:make-event #:event-type-p
+           #:make-domain-event
            #:make-command-entered-event #:make-command-parsed-event
            #:make-parse-failed-event #:make-pipeline-started-event
            #:make-process-created-event #:make-process-exited-event
@@ -54,7 +53,7 @@
             #:pipe-config-last-p #:pipeline-stage-count
             #:make-job #:job-id #:job-state #:job-pipeline
             #:job-state-valid-p #:job-state-transition #:command-to-list #:pipeline-length #:pipeline-empty-p #:pipeline-single-command-p #:job-running-p #:job-stopped-p #:job-completed-p #:job-pgid #:job-exit-code #:job-state-kw #:make-job-monitor #:monitor-find-job
-            #:job-state-kw #:job-exit-code #:job-pids #:job-command-line #:job-background-p))
+            #:job-pids #:job-command-line #:job-background-p))
 
   (defpackage #:nshell.domain.parsing
     (:use #:cl)
@@ -62,6 +61,7 @@
            #:shell-input-blank-p
            #:shell-word-separator-p #:shell-operator-separator-p
            #:shell-token-separator-p #:shell-command-separator-token-p
+           #:+redirect-specs+
            #:token-type #:token-value #:token-start #:token-end #:make-token
            #:ast-node-type #:make-command-node #:make-pipeline-node
            #:make-argument-node #:make-operator-node #:make-error-node
@@ -70,7 +70,6 @@
                 #:sequence-node-commands #:pipeline-node-commands
                 #:sequence-node-separators
                 #:command-node-arg-values #:arg-value #:arg-quoted-p
-            #:pipeline-node-commands
              #:if-node-p #:if-node-condition #:if-node-then-branch #:if-node-else-branch
              #:for-node-p #:for-node-var-name #:for-node-in-values #:for-node-body
              #:while-node-p #:while-node-condition #:while-node-body
@@ -79,6 +78,7 @@
              #:var-p #:make-var #:unify #:walk #:extend-bindings #:backtrack #:unify-p
            #:with-parsed-command-line #:with-parsed-command-line-case #:with-complete-command-line
            #:parse-complete-p #:parse-errors
+           #:parse-error-messages #:format-parse-error-messages
            #:parse-result-ast #:parse-result-incomplete
             #:parse-diagnostic #:parse-diagnostic-p
             #:parse-diagnostic-kind #:parse-diagnostic-kind-p #:parse-diagnostic-message
@@ -99,13 +99,19 @@
   (:export #:*glob-directory-files-fn* #:*glob-subdirectories-fn*
            #:expand-variables #:expand-tilde #:expand-glob #:expand-all))
 
-(defpackage #:nshell.domain.completion
+  (defpackage #:nshell.domain.completion
   (:use #:cl)
   (:export #:make-candidate #:candidate-text #:candidate-kind
             #:candidate-description #:candidate-score
             #:make-knowledge-base #:kb-add-command #:kb-add-option #:kb-query
             #:make-fact #:make-rule #:fact-p #:rule-p
             #:assert-fact! #:assert-rule! #:prove #:prove-all #:predicate-true-p
+            #:+command-path-builtin-specs+
+            #:+type-builtin-spec+
+            #:builtin-help-entries
+            #:builtin-completion-command-specs
+            #:builtin-rule-facts
+            #:builtin-rule-rules
             #:rule-complete
             #:complete
             #:completion-context-for #:completion-context-command
@@ -121,6 +127,7 @@
 (defpackage #:nshell.domain.history
   (:use #:cl)
   (:export #:make-history-entry #:entry-text #:entry-timestamp #:entry-exit-code
+           #:history-entry-texts
            #:command-history #:command-history-p #:make-command-history
            #:command-history-entries #:command-history-max-entries
            #:history-add #:history-search #:history-entry-line-prefix-suffix #:history-all
@@ -163,7 +170,8 @@
             #:shell-context-knowledge-base #:shell-context-environment
             #:shell-context-dispatcher #:shell-context-job-monitor
             #:shell-context-alias-table #:shell-context-abbreviation-table
-            #:shell-context-function-table #:shell-context-filesystem-fns
+            #:shell-context-function-table #:shell-context-function-source-table
+            #:shell-context-filesystem-fns
             #:shell-context-process-fns #:shell-context-terminal-fns
             #:shell-context-signal-fns #:shell-context-redirect-fns
             #:shell-context-history-fns #:shell-context-git-fns
@@ -171,8 +179,7 @@
             #:shell-context-last-exit-code #:shell-context-input-state
             #:shell-context-process-registry #:shell-context-terminal-rows
             #:shell-context-terminal-cols
-            #:register-builtin #:lookup-builtin #:builtin-p
-            #:register-default-builtins
+            #:lookup-builtin
             #:execute-command-line #:execute-pipeline-use-case #:execute-pipeline
             #:execute-command-node-in-context #:execute-pipeline-node-in-context
             #:execute-ast-in-context
@@ -196,7 +203,6 @@
             #:set-process-group #:set-foreground-pgroup #:get-foreground-pgroup
             #:make-process-group-leader #:reap-children #:get-terminal-size
             #:run-external #:run-external-capture
-            #:spawn-pipeline #:spawn-pipeline-async
             #:with-git-process-fns #:clear-git-status-cache
             #:invalidate-git-status-cache #:get-git-status
             #:get-git-branch #:git-dirty-p))
@@ -250,15 +256,17 @@
             #:input-state-last-argument-index
             #:input-state-search-query
             #:input-state-search-original-buffer
+            #:input-state-search-original-cursor
             #:input-state-search-index
+            #:with-normalized-input-state
             #:apply-history-search-results-to-input-state
             #:reduce-input-state #:insert-newline-at-cursor
-            #:key-event-type #:key-event-char
-            #:key-event-number #:key-event-data #:output-event
-            #:run-repl #:trampoline #:done #:render-prompt #:render-input-line
+            #:output-event
+            #:run-repl #:trampoline #:render-prompt
             #:compute-suggestion #:accept-suggestion
-            #:render-completions #:cycle-completion #:apply-completion
-             #:highlight-line #:highlight-span #:highlight-role
+             #:render-completions #:cycle-completion #:apply-completion
+             #:highlight-line #:highlight-span
              #:highlight-span-start #:highlight-span-end
+             #:highlight-span-role
              #:highlight->ansi #:theme-color->ansi #:segment-kind->role))
 )

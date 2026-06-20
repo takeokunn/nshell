@@ -49,6 +49,34 @@
         :single
         :double)))
 
+(defun %completion-quote-delimiters (input start end)
+  (let ((quote-char (and (< start (length input))
+                         (member (char input start) '(#\" #\') :test #'char=)
+                         (char input start))))
+    (if quote-char
+        (values (string quote-char)
+                (if (and (< start (1- end))
+                         (char= (char input (1- end)) quote-char))
+                    (string quote-char)
+                    ""))
+        (values "" ""))))
+
+(defun %completion-splice-with-quote-context (input start end replacement
+                                                   &key quote-context)
+  (multiple-value-bind (quote-prefix quote-suffix)
+      (if quote-context
+          (%completion-quote-delimiters input start end)
+          (values "" ""))
+    (values (concatenate 'string
+                         (subseq input 0 start)
+                         quote-prefix
+                         replacement
+                         quote-suffix
+                         (subseq input end))
+            (+ start
+               (length quote-prefix)
+               (length replacement)))))
+
 (defun %completion-single-quoted-insertion-text (text)
   (with-output-to-string (out)
     (loop with start = 0
@@ -145,39 +173,34 @@
 
 (defun maybe-extend-completion-common-prefix (state candidates)
   "Apply an unambiguous completion prefix, if CANDIDATES advance the token."
-  (let* ((state (normalize-input-state state))
-         (buffer (input-state-buffer state))
-         (cursor (input-state-cursor-pos state))
-         (prefix (completion-common-prefix candidates)))
-    (if (null prefix)
+  (with-normalized-input-state (state state)
+    (let ((buffer (input-state-buffer state))
+          (cursor (input-state-cursor-pos state))
+          (prefix (completion-common-prefix candidates)))
+      (if (null prefix)
         (values state nil)
-        (multiple-value-bind (start end) (%completion-token-bounds buffer cursor)
-          (multiple-value-bind (body-start body-end)
-              (%completion-token-body-bounds buffer start end)
-            (declare (ignore body-end))
-            (let* ((token (subseq buffer body-start cursor))
-                   (raw-token (%completion-unescape-token token)))
-              (if (and (> (length prefix) (length raw-token))
-                       (<= (length raw-token) (length prefix))
-                       (string= raw-token (subseq prefix 0 (length raw-token))))
+          (multiple-value-bind (start end) (%completion-token-bounds buffer cursor)
+            (multiple-value-bind (body-start body-end)
+                (%completion-token-body-bounds buffer start end)
+              (let* ((token (subseq buffer body-start body-end))
+                     (raw-token (%completion-unescape-token token)))
+                (if (and (> (length prefix) (length raw-token))
+                         (<= (length raw-token) (length prefix))
+                         (string= raw-token (subseq prefix 0 (length raw-token))))
                   (let* ((quote-context (%completion-quote-context buffer start end))
                          (insertion (%completion-insertion-text prefix
                                                                 :quote-context quote-context))
-                         (quote-prefix (if quote-context
-                                           (string (char buffer start))
-                                           ""))
-                         (new-buffer (concatenate 'string
-                                                  (subseq buffer 0 start)
-                                                  quote-prefix
-                                                  insertion
-                                                  (subseq buffer end))))
-                    (values (copy-input-state-clearing-completion state
-                             :buffer new-buffer
-                             :cursor-pos (+ start
-                                            (length quote-prefix)
-                                            (length insertion)))
-                            t))
-                  (values state nil))))))))
+                         (new-buffer (%completion-splice-with-quote-context
+                                      buffer start end insertion
+                                      :quote-context quote-context)))
+                      (values (copy-input-state-clearing-completion
+                               state
+                               :buffer new-buffer
+                               :cursor-pos (+ start
+                                              (if quote-context 1 0)
+                                              (length insertion)))
+                              t))
+                    (values state nil)))))))))
 
 (defun cycle-completion (candidates current)
   (let ((n (length candidates)))
@@ -188,14 +211,10 @@
     (let* ((quote-context (%completion-quote-context input start end))
            (text (%completion-insertion-text (%candidate-text candidate)
                                              :quote-context quote-context))
-           (quote-prefix (if quote-context
-                             (string (char input start))
-                             "")))
-        (values (concatenate 'string
-                             (subseq input 0 start)
-                             quote-prefix
-                             text
-                             (subseq input end))
-                (+ start
-                   (length quote-prefix)
-                    (length text))))))
+           (new-buffer (%completion-splice-with-quote-context
+                        input start end text
+                        :quote-context quote-context)))
+      (values new-buffer
+              (+ start
+                 (if quote-context 1 0)
+                 (length text))))))

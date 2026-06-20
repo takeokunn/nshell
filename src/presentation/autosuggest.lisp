@@ -11,16 +11,32 @@
              (not (nshell.domain.parsing:shell-input-blank-p input)))
     (handler-case
         (let* ((prefix (autosuggest-token-prefix input))
-               (candidate
-                 (first (nshell.domain.completion:complete knowledge-base
-                                                           input
-                                                           :path path))))
-          (when candidate
-            (let ((text (nshell.domain.completion:candidate-text candidate)))
-              (when (and (<= (length prefix) (length text))
-                         (string-equal prefix text :end2 (length prefix))
-                         (< (length prefix) (length text)))
-                (subseq text (length prefix))))))
+               (candidates (nshell.domain.completion:complete knowledge-base
+                                                              input
+                                                              :path path))
+               (text (if (or (null candidates)
+                             (some (lambda (candidate)
+                                     (member (nshell.domain.completion:candidate-kind candidate)
+                                             '(:file :directory)
+                                             :test #'eq))
+                                   candidates))
+                         (nshell.domain.completion:candidate-text (first candidates))
+                         (nshell.presentation::completion-common-prefix candidates))))
+          (when text
+            (when (and (<= (length prefix) (length text))
+                       (string-equal prefix text :end2 (length prefix))
+                       (< (length prefix) (length text)))
+              (multiple-value-bind (token-start token-end)
+                  (nshell.presentation::%completion-token-bounds input (length input))
+                (let* ((quote-context (nshell.presentation::%completion-quote-context
+                                       input token-start token-end))
+                       (escaped-prefix (nshell.presentation::%completion-insertion-text
+                                        prefix
+                                        :quote-context quote-context))
+                       (escaped-text (nshell.presentation::%completion-insertion-text
+                                      text
+                                      :quote-context quote-context)))
+                  (subseq escaped-text (length escaped-prefix)))))))
       (error () nil))))
 
 (defun compute-suggestion (history input &key knowledge-base path)

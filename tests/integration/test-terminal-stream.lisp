@@ -176,9 +176,9 @@
         (meta-control-h
           (single-key-event-from-string
            (coerce (list #\Esc (code-char 8)) 'string))))
-    (is (eq :alt-left
+    (is (eq :alt-b
             (nshell.infrastructure.terminal:key-event-type meta-b)))
-    (is (eq :alt-right
+    (is (eq :alt-f
             (nshell.infrastructure.terminal:key-event-type meta-f)))
     (is (eq :alt-c
             (nshell.infrastructure.terminal:key-event-type meta-c)))

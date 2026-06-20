@@ -88,6 +88,18 @@
       (is-input-state mouse-state :buffer "abc" :cursor-pos 2)
       (is (eq :redraw mouse-output)))))
 
+(test input-state-meta-b-and-f-move-by-word
+  (let ((state (input-state
+                :buffer "git checkout main"
+                :cursor-pos 17)))
+    (with-expected-input-state-reduction (left-state left-output)
+        state
+        (reduce-once state :alt-b)
+        :redraw
+        (:cursor-pos 13)
+      (with-reduced-input-state (right-state) (reduce-once left-state :alt-f)
+        (is-input-state right-state :cursor-pos 17)))))
+
 (test input-state-word-navigation-treats-escaped-space-as-token-content
   (let ((state (input-state
                 :buffer "cat my\\ file.txt next"

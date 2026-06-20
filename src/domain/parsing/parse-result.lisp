@@ -22,17 +22,17 @@
 (defun parse-errors (result)
   (parse-result-errors result))
 
+(defun parse-error-messages (result)
+  (mapcar #'parse-diagnostic-message (parse-errors result)))
+
+(defun format-parse-error-messages (result)
+  (format nil "~{~a~^; ~}" (parse-error-messages result)))
+
 (defun parse-diagnostic-kind-p (result kind)
   (not (null (find kind (parse-errors result)
                    :key #'parse-diagnostic-kind))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defmacro %with-parsed-command-line-bindings ((result ast parsed-result) &body body)
-    `(let ((,result ,parsed-result)
-           (,ast (parse-result-ast ,parsed-result)))
-       (declare (ignorable ,result ,ast))
-       ,@body))
-
   (defmacro with-parsed-command-line ((result line) &body body)
     `(let ((,result (parse-command-line ,line)))
        (declare (ignorable ,result))
@@ -45,24 +45,30 @@
         `(let ((,parsed-result (parse-command-line ,line)))
            (cond
              ((parse-complete-p ,parsed-result)
-              (%with-parsed-command-line-bindings (,result ,ast ,parsed-result)
+              (let ((,result ,parsed-result)
+                    (,ast (parse-result-ast ,parsed-result)))
+                (declare (ignorable ,result ,ast))
                 ,@(branch-body :complete)))
              ((parse-result-incomplete ,parsed-result)
-              (%with-parsed-command-line-bindings (,result ,ast ,parsed-result)
+              (let ((,result ,parsed-result)
+                    (,ast (parse-result-ast ,parsed-result)))
+                (declare (ignorable ,result ,ast))
                 ,@(branch-body :incomplete)))
              ((parse-errors ,parsed-result)
-              (%with-parsed-command-line-bindings (,result ,ast ,parsed-result)
+              (let ((,result ,parsed-result)
+                    (,ast (parse-result-ast ,parsed-result)))
+                (declare (ignorable ,result ,ast))
                 ,@(branch-body :error)))
-             (t
-              (%with-parsed-command-line-bindings (,result ,ast ,parsed-result)
-                ,@(branch-body :error))))))))
+             ))))))
 
   (defmacro with-complete-command-line ((result ast line) &body body)
     (let ((parsed-result (gensym "PARSE-RESULT-")))
       `(let ((,parsed-result (parse-command-line ,line)))
          (when (parse-complete-p ,parsed-result)
-           (%with-parsed-command-line-bindings (,result ,ast ,parsed-result)
-             ,@body))))))
+           (let ((,result ,parsed-result)
+                 (,ast (parse-result-ast ,parsed-result)))
+             (declare (ignorable ,result ,ast))
+             ,@body)))))
 
 (defun %token-diagnostic (kind message token)
   (make-parse-diagnostic kind message

@@ -62,18 +62,17 @@
       (multiple-value-bind (new-state output) (reduce-once state :ctrl-l)
         (and (eq :clear-screen output)
              (eq :search (nshell.presentation:input-state-mode new-state))
-             (string= selected (nshell.presentation:input-state-buffer new-state))
-             (= cursor (nshell.presentation:input-state-cursor-pos new-state))
-             (string= query
-                      (nshell.presentation:input-state-search-query new-state))
+             (string= query (nshell.presentation:input-state-search-query new-state))
              (string= original
                       (nshell.presentation:input-state-search-original-buffer
                        new-state))
              (= original-cursor
-                (nshell.presentation::input-state-search-original-cursor
+                (nshell.presentation:input-state-search-original-cursor
                  new-state))
              (= search-index
                 (nshell.presentation:input-state-search-index new-state))
+             (string= selected (nshell.presentation:input-state-buffer new-state))
+             (= cursor (nshell.presentation:input-state-cursor-pos new-state))
              (= completion-index
                 (nshell.presentation:input-state-completion-index new-state))
              (string= selected
@@ -105,14 +104,11 @@
            state
            (input-key-event :right))
         (and (eq :suggest-update output)
-             (eq :insert
-                 (nshell.presentation:input-state-mode accepted))
+             (is-search-session-cleared accepted)
              (string= selected
                       (nshell.presentation:input-state-buffer accepted))
              (= (length selected)
-                (nshell.presentation:input-state-cursor-pos accepted))
-             (string= ""
-                      (nshell.presentation:input-state-search-query accepted)))))))
+                (nshell.presentation:input-state-cursor-pos accepted)))))))
 
 (test pbt-input-state-history-search-empty-backspace-restores-original
   "Backspace on an empty reverse-search query behaves like cancel."
@@ -132,16 +128,14 @@
            state
            (input-key-event :backspace))
         (and (eq :suggest-update output)
-             (eq :insert
-                 (nshell.presentation:input-state-mode restored))
-             (string= original
-                      (nshell.presentation:input-state-buffer restored))
-             (= (length original)
-                (nshell.presentation:input-state-cursor-pos restored))
-             (string= ""
-                      (nshell.presentation:input-state-search-query restored))
-             (= 0
-                (nshell.presentation:input-state-search-index restored)))))))
+             (is-search-state restored
+                              :mode :insert
+                              :buffer original
+                              :cursor-pos (length original)
+                              :query ""
+                              :original-buffer ""
+                              :original-cursor nil
+                              :index 0))))))
 
 (test pbt-input-state-history-search-empty-results-restore-original-cursor
   "Empty history-search results restore the saved buffer and cursor."
@@ -152,25 +146,27 @@
                  #'shrink-prompt-text)
        (cursor (gen-in-range 0 32) nil)
        (index (gen-in-range 0 32) nil))
-    (let ((saved-cursor (min cursor (length original)))
-          (state (history-search-state
-                  :buffer selected
-                  :query "q"
-                  :original-buffer original
-                  :original-cursor (min cursor (length original))
-                  :index index)))
-      (let ((applied
-              (nshell.presentation:apply-history-search-results-to-input-state
-               state '())))
-        (and (eq :search (nshell.presentation:input-state-mode applied))
+    (let* ((saved-cursor (min cursor (length original)))
+           (state (history-search-state
+                   :buffer selected
+                   :query "q"
+                   :original-buffer original
+                   :original-cursor saved-cursor
+                   :index index)))
+        (let ((applied
+                (nshell.presentation:apply-history-search-results-to-input-state
+                 state '())))
+          (and (eq :search (nshell.presentation:input-state-mode applied))
+             (string= "q" (nshell.presentation:input-state-search-query applied))
              (string= original
-                      (nshell.presentation:input-state-buffer applied))
+                      (nshell.presentation:input-state-search-original-buffer
+                       applied))
              (= saved-cursor
-                (nshell.presentation:input-state-cursor-pos applied))
-             (string= "q"
-                      (nshell.presentation:input-state-search-query applied))
-             (= index
-                (nshell.presentation:input-state-search-index applied)))))))
+                (nshell.presentation:input-state-search-original-cursor applied))
+             (= index (nshell.presentation:input-state-search-index applied))
+             (string= original (nshell.presentation:input-state-buffer applied))
+             (= saved-cursor
+                (nshell.presentation:input-state-cursor-pos applied)))))))
 
 (test pbt-input-state-history-search-paste-matches-typed-query
   "Bracketed paste in reverse search edits the query like typing the same text."
@@ -203,5 +199,10 @@
                       (nshell.presentation:input-state-search-query pasted))
              (string= original
                       (nshell.presentation:input-state-buffer pasted))
-             (= 0
-                (nshell.presentation:input-state-search-index pasted)))))))
+             (eq :search (nshell.presentation:input-state-mode pasted))
+             (string= query
+                      (nshell.presentation:input-state-search-query pasted))
+             (string= original
+                      (nshell.presentation:input-state-search-original-buffer
+                       pasted))
+             (= 0 (nshell.presentation:input-state-search-index pasted)))))))

@@ -1,12 +1,5 @@
 (in-package #:nshell.presentation)
 
-(defun %wrap-rendered-position (row column terminal-width)
-  (if (and terminal-width
-           (plusp terminal-width)
-           (> column terminal-width))
-      (values (1+ row) (- column terminal-width))
-      (values row column)))
-
 (defun %advance-rendered-character (row column char terminal-width)
   (if (char= char #\Newline)
       (values (1+ row) 2)
@@ -16,7 +9,11 @@
                    (> (+ column char-width) terminal-width))
           (setf row (1+ row)
                 column 0))
-        (%wrap-rendered-position row (+ column char-width) terminal-width))))
+        (if (and terminal-width
+                 (plusp terminal-width)
+                 (> char-width terminal-width))
+            (values (1+ row) (- char-width terminal-width))
+            (values row (+ column char-width))))))
 
 (defun %advance-rendered-string (row column text terminal-width)
   (loop for char across (or text "")
@@ -25,12 +22,13 @@
         finally (return (values row column))))
 
 (defun %initial-rendered-position (prompt-width terminal-width)
-  (if (and terminal-width
+  (let ((prompt-width (or prompt-width 0)))
+    (if (and terminal-width
            (plusp terminal-width)
            (> prompt-width terminal-width))
-      (values (floor (1- prompt-width) terminal-width)
-              (1+ (mod (1- prompt-width) terminal-width)))
-      (values 0 prompt-width)))
+        (values (floor (1- prompt-width) terminal-width)
+                (1+ (mod (1- prompt-width) terminal-width)))
+        (values 0 prompt-width))))
 
 (defun %rendered-buffer-line-count (text &key suggestion search-suffix terminal-width
                                          (prompt-width 0))
@@ -44,17 +42,6 @@
       (%advance-rendered-string row column search-suffix terminal-width))
     (1+ row)))
 
-(defun %cursor-tail-visible-width (text cursor suggestion search-suffix)
-  (let* ((clamped-cursor (max 0 (min cursor (length text))))
-         (tail (subseq text clamped-cursor)))
-    (+ (%string-visible-width tail)
-       (%string-visible-width (or suggestion ""))
-       (%string-visible-width (or search-suffix "")))))
-
-(defun %move-cursor-left-by-visible-width (columns)
-  (when (plusp columns)
-    (format t "~C[~dD" #\Esc columns)))
-
 (defun %rendered-buffer-position (text cursor prompt-width &key terminal-width)
   (multiple-value-bind (initial-row initial-column)
       (%initial-rendered-position prompt-width terminal-width)
@@ -65,6 +52,22 @@
           do (multiple-value-setq (row column)
                (%advance-rendered-character row column char terminal-width))
           finally (return (values row column)))))
+
+(defun %cursor-tail-visible-width (text cursor prompt-width suggestion
+                                   &optional search-suffix terminal-width)
+  (multiple-value-bind (cursor-row cursor-column)
+      (%rendered-buffer-position text cursor prompt-width
+                                 :terminal-width terminal-width)
+    (multiple-value-bind (final-row final-column)
+        (%rendered-buffer-position text (length text) prompt-width
+                                   :terminal-width terminal-width)
+      (multiple-value-setq (final-row final-column)
+        (%advance-rendered-string final-row final-column suggestion terminal-width))
+      (multiple-value-setq (final-row final-column)
+        (%advance-rendered-string final-row final-column search-suffix terminal-width))
+      (if (= cursor-row final-row)
+          (max 0 (- final-column cursor-column))
+          0))))
 
 (defun %move-cursor-to-rendered-position (text cursor prompt-width suggestion search-suffix
                                           &key terminal-width)
@@ -82,5 +85,7 @@
         (cond
           ((plusp rows-up)
            (format t "~C[~dA~C[~dG" #\Esc rows-up #\Esc (1+ target-column)))
-          ((plusp (- final-column target-column))
-           (%move-cursor-left-by-visible-width (- final-column target-column))))))))
+          (t
+           (let ((columns (- final-column target-column)))
+             (when (plusp columns)
+               (format t "~C[~dD" #\Esc columns)))))))))

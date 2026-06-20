@@ -67,10 +67,11 @@
           (%table-query-status table args)))
 
 (defun %alias-inline-expansion (name inline-value args)
-  (%join-command-args
+  (%string-join
    (if name
        (cons inline-value (rest args))
-       (rest args))))
+       (rest args))
+   " "))
 
 (defun %alias-store-assignment (table args)
   (multiple-value-bind (name value) (%split-alias-assignment (first args))
@@ -135,10 +136,6 @@
 (defun %abbr-usage ()
   (%builtin-usage "abbr" "abbr [-a [-p command|anywhere] name expansion...] [-e name...] [-q name...] [-l] [-s]"))
 
-(defparameter +abbr-position-specs+
-  '(("command" . :command)
-    ("anywhere" . :anywhere)))
-
 (defun %abbr-parse-position (value)
   (cdr (assoc value +abbr-position-specs+ :test #'string=)))
 
@@ -171,7 +168,7 @@
                 (values nil nil nil (%abbr-usage)))
                (t
                 (values (first remaining)
-                        (%join-command-args (rest remaining))
+                        (%string-join (rest remaining) " ")
                         position
                         nil)))))
     (parse rest-args nil)))

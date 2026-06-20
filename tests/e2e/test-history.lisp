@@ -26,7 +26,7 @@
                      history
                      (nshell.presentation:input-state-search-query state)
                      :contains))
-           (texts (history-result-texts entries)))
+           (texts (nshell.domain.history:history-entry-texts entries)))
       (setf state
             (nshell.presentation:apply-history-search-results-to-input-state
              state texts)))
@@ -50,8 +50,7 @@
            (input-key-event :ctrl-r))
         (is (eq :search-start start-output))
         (setf nshell.presentation::*input-state* searching)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event start-output)))
+        (capture-process-output-event start-output))
       (is (eq :search (nshell.presentation:input-state-mode
                        nshell.presentation::*input-state*)))
       (is (string= "git"
@@ -81,7 +80,7 @@
                      history
                      (nshell.presentation:input-state-search-query state)
                      :contains))
-           (texts (history-result-texts entries)))
+           (texts (nshell.domain.history:history-entry-texts entries)))
       (setf state
             (nshell.presentation:apply-history-search-results-to-input-state
              state texts)))
@@ -110,8 +109,7 @@
            (input-key-event :ctrl-r))
         (is (eq :search-start start-output))
         (setf nshell.presentation::*input-state* searching)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event start-output)))
+        (capture-process-output-event start-output))
       (multiple-value-bind (updated output)
           (nshell.presentation:reduce-input-state
            nshell.presentation::*input-state*
@@ -119,8 +117,7 @@
                             '(:protocol :bracketed :text "status --short")))
         (is (eq :search-update output))
         (setf nshell.presentation::*input-state* updated)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event output)))
+        (capture-process-output-event output))
       (is (string= "status --short"
                    (nshell.presentation:input-state-search-query
                     nshell.presentation::*input-state*)))
@@ -140,8 +137,7 @@ git status"))
              (input-key-event :ctrl-r))
           (is (eq :search-start output))
           (setf nshell.presentation::*input-state* searching)
-          (with-output-to-string (*standard-output*)
-            (nshell.presentation::process-output-event output)))
+          (capture-process-output-event output))
         (dolist (ch (coerce "git" 'list))
           (multiple-value-bind (updated output)
               (nshell.presentation:reduce-input-state
@@ -149,8 +145,7 @@ git status"))
                (input-key-event :char ch))
             (is (eq :search-update output))
             (setf nshell.presentation::*input-state* updated)
-            (with-output-to-string (*standard-output*)
-              (nshell.presentation::process-output-event output))))
+            (capture-process-output-event output)))
         (is-input-state nshell.presentation::*input-state*
                         :buffer multiline
                         :cursor-pos (length multiline))))))
@@ -167,8 +162,7 @@ git status"))
              (input-key-event :up))
           (is (eq :history-prev output))
           (setf nshell.presentation::*input-state* requested)
-          (with-output-to-string (*standard-output*)
-            (nshell.presentation::process-output-event output)))
+          (capture-process-output-event output))
         (is-input-state nshell.presentation::*input-state*
                         :buffer multiline
                         :cursor-pos (length multiline))))))
@@ -205,8 +199,7 @@ git status --short")
         (is (eq :insert-last-argument output))
         (is-input-state requested :buffer "echo " :cursor-pos 5)
         (setf nshell.presentation::*input-state* requested)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event output))
+        (capture-process-output-event output)
         (is-input-state nshell.presentation::*input-state*
                         :buffer "echo --short"
                         :cursor-pos 12)))))
@@ -220,8 +213,7 @@ git status --short")
            (input-key-event :alt-dot))
         (is (eq :insert-last-argument output))
         (setf nshell.presentation::*input-state* requested)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event output)))
+        (capture-process-output-event output))
       (is-input-state nshell.presentation::*input-state*
                       :buffer "echo --short"
                       :cursor-pos 12)
@@ -231,8 +223,7 @@ git status --short")
            (input-key-event :alt-dot))
         (is (eq :insert-last-argument output))
         (setf nshell.presentation::*input-state* requested)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event output)))
+        (capture-process-output-event output))
       (is-input-state nshell.presentation::*input-state*
                       :buffer "echo api"
                       :cursor-pos 8))))
@@ -246,8 +237,7 @@ git status --short")
            (input-key-event :up))
         (is (eq :history-prev output))
         (setf nshell.presentation::*input-state* requested)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event output)))
+        (capture-process-output-event output))
       (is-input-state nshell.presentation::*input-state*
                       :buffer "git status"
                       :cursor-pos 10)
@@ -257,8 +247,7 @@ git status --short")
            (input-key-event :char #\!))
         (is (eq :suggest-update edit-output))
         (setf nshell.presentation::*input-state* edited)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event edit-output)))
+        (capture-process-output-event edit-output))
       (is-input-state nshell.presentation::*input-state*
                       :buffer "git status!"
                       :cursor-pos 11)
@@ -268,8 +257,7 @@ git status --short")
            (input-key-event :up))
         (is (eq :history-prev output-again))
         (setf nshell.presentation::*input-state* requested-again)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event output-again)))
+        (capture-process-output-event output-again))
       (is-input-state nshell.presentation::*input-state*
                       :buffer "git status!"
                       :cursor-pos 11))))

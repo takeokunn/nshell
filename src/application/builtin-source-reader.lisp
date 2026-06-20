@@ -120,33 +120,24 @@
            (%source-substitution-fallback source))))))
 
 (defun %expand-command-substitutions (context value)
-  (let ((parts (list ""))
-        (pos 0)
-        (len (length value)))
-    (labels ((emit-char (ch)
-               (setf parts (%append-command-substitution-char parts ch)))
-             (emit-fields (start end)
-               (setf parts
-                     (%append-command-substitution-fields
-                      parts
-                      (%execute-command-substitution-fields
-                       context
-                       (subseq value start end))))))
-      (loop while (< pos len)
-            for ch = (char value pos)
-            do (if (char= ch #\()
-                   (let ((end (%command-substitution-end value pos)))
-                     (if (and end (> end (1+ pos)))
-                         (progn
-                           (emit-fields (1+ pos) end)
-                           (setf pos (1+ end)))
-                         (progn
-                           (emit-char ch)
-                           (incf pos))))
-                   (progn
-                     (emit-char ch)
-                     (incf pos)))))
-    parts))
+  (labels ((walk (pos parts)
+             (if (>= pos (length value))
+                 parts
+                 (let ((ch (char value pos)))
+                   (if (char= ch #\()
+                       (let ((end (%command-substitution-end value pos)))
+                         (if (and end (> end (1+ pos)))
+                             (walk (1+ end)
+                                   (%append-command-substitution-fields
+                                    parts
+                                    (%execute-command-substitution-fields
+                                     context
+                                     (subseq value (1+ pos) end))))
+                             (walk (1+ pos)
+                                   (%append-command-substitution-char parts ch))))
+                       (walk (1+ pos)
+                             (%append-command-substitution-char parts ch)))))))
+    (walk 0 (list ""))))
 
 (defun %expand-source-arg-in-context (context arg)
   (let ((value (nshell.domain.parsing:arg-value arg)))
@@ -230,51 +221,61 @@
             ((eq type :word)
              (setf expect-command nil))))))))
 
-(defun %source-function-definition (context name line lines)
+(defun %source-function-definition-consume-lines (source depth body inline-body include-inline-p)
+  (loop while source
+        for body-line = (pop source)
+        for line-delta = (%source-definition-line-depth-delta body-line)
+        do (if (and (= depth 1)
+                    (= line-delta -1))
+               (return (values t source depth body inline-body))
+               (progn
+                 (push body-line body)
+                 (when include-inline-p
+                   (push body-line inline-body))
+                 (incf depth line-delta)))
+        finally (return (values nil source depth body inline-body))))
+
+(defun %source-function-definition-finish (context name body inline-body inline-lines remaining source-path)
+  (let ((function-body (nreverse body))
+        (inline-body-lines (nreverse inline-body))
+        (tail (append inline-lines remaining)))
+    (setf (gethash name (shell-context-function-table context))
+          function-body
+          (gethash name (shell-context-function-source-table context))
+          source-path)
+    (if inline-body-lines
+        (multiple-value-bind (chunk exit-code)
+            (%source-lines context inline-body-lines source-path)
+          (values tail chunk exit-code))
+        (values tail nil 0))))
+
+(defun %source-function-definition (context name line lines source-path)
   (let ((body nil)
         (inline-body nil)
         (closed nil)
         (depth 1)
         (inline-lines (rest (%source-line-segments line)))
         (remaining lines))
-    (loop while inline-lines
-          for body-line = (pop inline-lines)
-          for line-delta = (%source-definition-line-depth-delta body-line)
-          do (if (and (= depth 1)
-                      (= line-delta -1))
-                 (progn
-                   (setf closed t)
-                   (return))
-                 (progn
-                   (push body-line body)
-                   (push body-line inline-body)
-                   (incf depth line-delta))))
-    (loop while (and (not closed)
-                     remaining)
-          for body-line = (pop remaining)
-          for line-delta = (%source-definition-line-depth-delta body-line)
-          do (if (and (= depth 1)
-                      (= line-delta -1))
-                 (progn
-                   (setf closed t)
-                   (return))
-                 (progn
-                   (push body-line body)
-                   (incf depth line-delta))))
+    (multiple-value-bind (inline-closed inline-tail inline-depth new-body new-inline-body)
+        (%source-function-definition-consume-lines inline-lines depth body inline-body t)
+      (setf closed inline-closed
+            inline-lines inline-tail
+            depth inline-depth
+            body new-body
+            inline-body new-inline-body))
+    (when (not closed)
+      (multiple-value-bind (remaining-closed remaining-tail remaining-depth new-body new-inline-body)
+          (%source-function-definition-consume-lines remaining depth body inline-body nil)
+        (setf closed remaining-closed
+              remaining remaining-tail
+              depth remaining-depth
+              body new-body
+              inline-body new-inline-body)))
     (if closed
-        (let ((function-body (nreverse body))
-              (inline-body-lines (nreverse inline-body))
-              (tail (append inline-lines remaining)))
-          (setf (gethash name (shell-context-function-table context))
-                function-body)
-          (if inline-body-lines
-              (multiple-value-bind (chunk exit-code)
-                  (%source-lines context inline-body-lines)
-                (values tail chunk exit-code))
-              (values tail nil 0)))
+        (%source-function-definition-finish context name body inline-body inline-lines remaining source-path)
         (values nil (format nil "source: function ~a missing end~%" name) 2))))
 
-(defun %source-lines (context lines)
+(defun %source-lines (context lines &optional source-path)
   (let ((output nil)
         (code 0)
         (remaining lines))
@@ -283,7 +284,7 @@
           for function-name = (%function-start-p line)
           do (if function-name
                  (multiple-value-bind (tail chunk exit-code)
-                     (%source-function-definition context function-name line remaining)
+                     (%source-function-definition context function-name line remaining source-path)
                    (setf remaining tail
                          code exit-code)
                    (when chunk (push chunk output)))

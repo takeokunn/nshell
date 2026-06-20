@@ -1,16 +1,17 @@
 (in-package #:nshell/test)
 
-(defun repl-completion-texts (candidates)
-  (mapcar #'nshell.domain.completion:candidate-text candidates))
-
-(defun repl-ansi (suffix)
-  (format nil "~C~a" #\Esc suffix))
+(defun current-sbcl-executable ()
+  (or (uiop:getenv "SBCL")
+      #+sbcl (when sb-ext:*runtime-pathname*
+               (namestring sb-ext:*runtime-pathname*))
+      #-sbcl nil
+      "sbcl"))
 
 (defmacro with-repl-test-state (&body body)
   `(let ((nshell.presentation::*running* t)
          (nshell.presentation::*last-exit-code* 0)
          (nshell.presentation::*history* (nshell.domain.history:make-command-history))
-         (nshell.presentation::*config* nil)
+         (nshell.presentation::*config* (nshell.domain.configuration:default-config))
          (nshell.presentation::*kb* (nshell.domain.completion:make-knowledge-base))
          (nshell.presentation::*input-state* nil)
          (nshell.presentation::*completion-rendered-lines* 0)
@@ -20,8 +21,9 @@
          (nshell.presentation::*aliases* (make-hash-table :test #'equal))
          (nshell.presentation::*abbreviations* (make-hash-table :test #'equal))
          (nshell.presentation::*functions* (make-hash-table :test #'equal))
+         (nshell.presentation::*function-sources* (make-hash-table :test #'equal))
          (nshell.presentation::*proc-registry* (make-hash-table :test #'eql)))
-     ,@body))
+    ,@body))
 
 (defmacro with-temporary-function ((symbol function) &body body)
   `(let ((original-function (symbol-function ,symbol)))
@@ -34,8 +36,8 @@
 (defmacro with-stable-repl-prompt ((&key (width 4) (text "ns> ")) &body body)
   `(with-temporary-function
        ('nshell.presentation::render-prompt
-        (lambda (config last-exit &key terminal-width)
-          (declare (ignore config last-exit terminal-width))
+        (lambda (config last-exit &key last-command-duration-ms terminal-width)
+          (declare (ignore config last-exit last-command-duration-ms terminal-width))
           (format t "~a" ,text)
           ,width))
      ,@body))
@@ -60,13 +62,62 @@
      (with-repl-input-state ,input-initargs
        ,@body)))
 
+(defmacro capture-process-output-event (event)
+  `(capture-standard-output
+     (let ((continuation (nshell.presentation::process-output-event ,event)))
+       (when continuation
+         (funcall continuation)))))
+
+(defmacro capture-standard-output (&body body)
+  `(with-output-to-string (*standard-output*)
+     ,@body))
+
+(defmacro with-temporary-output-file ((name &key (prefix "nshell-repl-output")) &body body)
+  `(let ((,name (namestring
+                 (merge-pathnames
+                  (make-pathname :name (format nil "~a~d" ,prefix (get-internal-real-time))
+                                 :type "txt")
+                  (uiop:temporary-directory)))))
+     (unwind-protect
+          (progn ,@body)
+       (ignore-errors
+         (when (probe-file ,name)
+           (delete-file ,name))))))
+
+(defun wait-for-file-content (path expected &key (attempts 50) (delay 0.02))
+  "Wait for PATH to exist and contain EXPECTED."
+  (loop repeat attempts
+        when (and (probe-file path)
+                  (string= expected (uiop:read-file-string path)))
+        do (return t)
+        do (sleep delay)
+        finally (return (and (probe-file path)
+                             (string= expected (uiop:read-file-string path))))))
+
+(defun call-with-captured-output (thunk)
+  (let ((results nil))
+    (values
+     (capture-standard-output
+       (setf results (multiple-value-list (funcall thunk))))
+     results)))
+
 (defun call-repl-builtin (command args)
   (let ((builtin-p nil)
-        (code nil)
-        (output nil))
-    (setf output
-          (with-output-to-string (*standard-output*)
-            (multiple-value-setq (builtin-p code)
-              (nshell.presentation::execute-builtin
-               (nshell.domain.parsing:make-command-node command args)))))
-    (values output builtin-p code)))
+        (code nil))
+    (multiple-value-bind (output results)
+        (call-with-captured-output
+         (lambda ()
+           (multiple-value-setq (builtin-p code)
+             (nshell.presentation::execute-builtin
+              (nshell.domain.parsing:make-command-node command args)))))
+      (declare (ignore results))
+      (values output builtin-p code))))
+
+(defun call-repl-execute-ast (ast)
+  (let ((code nil))
+    (multiple-value-bind (output results)
+        (call-with-captured-output
+         (lambda ()
+           (setf code (nshell.presentation::execute-ast ast))))
+      (declare (ignore results))
+      (values output code))))

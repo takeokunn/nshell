@@ -65,5 +65,5 @@
     (setf (nshell.domain.execution:job-background-p job) t)
     (nshell.domain.job-control:monitor-update
      nshell.application:*job-monitor* jid :running)
-    (register-background-proc jid procs)
+    (setf (gethash jid nshell.presentation::*proc-registry*) procs)
     (format t "[~d] ~d~%" jid pgid)))

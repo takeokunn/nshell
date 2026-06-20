@@ -11,7 +11,7 @@
                             "stash"
                             :kind :command
                             :description "store local modifications")))
-         (output (with-output-to-string (*standard-output*)
+         (output (capture-standard-output
                    (nshell.presentation:render-completions
                     candidates
                     :selected-index 1))))
@@ -50,8 +50,19 @@
       (setf (symbol-function 'nshell.infrastructure.acl:get-terminal-size)
             original-get-terminal-size))))
 
-(test completion-display-width-counts-cjk-as-two-columns
-  (is (= 4 (nshell.presentation::%display-width "λ あ"))))
+(test completion-rendering-pads-wide-candidates-to-column-width
+  (let* ((candidates (list (nshell.domain.completion:make-candidate
+                            "λ あ"
+                            :kind :file)))
+         (output (capture-standard-output
+                   (nshell.presentation:render-completions
+                    candidates
+                    :terminal-width 80))))
+    (is (string= (concatenate 'string
+                              (string #\Newline)
+                              "∙ λ あ  "
+                              (string #\Newline))
+                 output))))
 
 (test completion-rendering-returns-rendered-line-count
   (let ((*standard-output* (make-string-output-stream)))
@@ -113,6 +124,21 @@
       (is (not (null extended-p)))
       (is-input-state new-state
                       :buffer "cat 'my file-"
+                      :cursor-pos 13
+                      :completion-index -1
+                      :suggestion nil))))
+
+(test completion-common-prefix-extension-closed-quoted-token-keeps-closing-quote
+  (let* ((state (input-state
+                 :buffer "cat \"my\""
+                 :cursor-pos 8))
+         (candidates '("my file-a.txt" "my file-b.txt")))
+    (multiple-value-bind (new-state extended-p)
+        (nshell.presentation::maybe-extend-completion-common-prefix state
+                                                                    candidates)
+      (is (not (null extended-p)))
+      (is-input-state new-state
+                      :buffer "cat \"my file-\""
                       :cursor-pos 13
                       :completion-index -1
                       :suggestion nil))))

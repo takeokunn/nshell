@@ -9,15 +9,13 @@
 (test history-suggestion-returns-suffix-and-publishes-completion-event
   "Suggestions return only the completion suffix for the newest prefix match."
   (with-history (history "git status" "git stash" "echo done")
-    (let ((dispatcher (nshell.application:make-event-dispatcher))
-          (events nil))
-      (nshell.application:subscribe dispatcher :completion-triggered
-                                    (lambda (event)
-                                      (push (nshell.domain.events:event-type event) events)))
-      (is (string= " stash"
-                   (nshell.application:history-suggestion history "git" dispatcher)))
-      (is (null (nshell.application:drain-events dispatcher)))
-      (is (equal '(:completion-triggered) (nreverse events))))))
+    (let ((dispatcher (nshell.application:make-event-dispatcher)))
+      (with-event-capture (events dispatcher :completion-triggered)
+          (nshell.domain.events:domain-event-type event)
+        (is (string= " stash"
+                     (nshell.application:history-suggestion history "git" dispatcher)))
+        (is (null (nshell.application:drain-events dispatcher)))
+        (is (equal '(:completion-triggered) (nreverse events)))))))
 
 (test history-suggestion-returns-nil-without-match
   "Suggestions are NIL when no command has the requested prefix."
@@ -68,35 +66,31 @@ git status")
 (test history-suggestion-ignores-blank-input
   "Empty prompts should not ghost the newest command from history."
   (with-history (history "git status" "echo done")
-    (let ((dispatcher (nshell.application:make-event-dispatcher))
-          (events nil))
-      (nshell.application:subscribe dispatcher :completion-triggered
-                                    (lambda (event)
-                                      (push (nshell.domain.events:event-type event) events)))
-      (is (null (nshell.application:history-suggestion history "" dispatcher)))
-      (is (null (nshell.application:history-suggestion history "   " dispatcher)))
-      (is (null (nshell.application:history-suggestion history "|" dispatcher)))
-      (is (null (nshell.application:history-suggestion history "&&" dispatcher)))
-      (is (null events)))))
+    (let ((dispatcher (nshell.application:make-event-dispatcher)))
+      (with-event-capture (events dispatcher :completion-triggered)
+          (nshell.domain.events:domain-event-type event)
+        (is (null (nshell.application:history-suggestion history "" dispatcher)))
+        (is (null (nshell.application:history-suggestion history "   " dispatcher)))
+        (is (null (nshell.application:history-suggestion history "|" dispatcher)))
+        (is (null (nshell.application:history-suggestion history "&&" dispatcher)))
+        (is (null events))))))
 
 (test search-history-use-case-delegates-mode-and-publishes-event
   "The search use case supports domain search modes and emits a search event."
   (with-history (history "git status" "make test" "grep status log")
-    (let ((dispatcher (nshell.application:make-event-dispatcher))
-          (events nil))
-      (nshell.application:subscribe dispatcher :history-searched
-                                    (lambda (event)
-                                      (push (nshell.domain.events:event-type event) events)))
-      (let ((results (nshell.application:search-history-use-case
-                      history "status" :contains dispatcher)))
-        (is (= 2 (length results)))
-        (let ((matching 0))
-          (dolist (entry results)
-            (when (search "status" (nshell.domain.history:entry-text entry))
-              (incf matching)))
-          (is (= 2 matching))))
-      (is (null (nshell.application:drain-events dispatcher)))
-      (is (equal '(:history-searched) (nreverse events))))))
+    (let ((dispatcher (nshell.application:make-event-dispatcher)))
+      (with-event-capture (events dispatcher :history-searched)
+          (nshell.domain.events:domain-event-type event)
+        (let ((results (nshell.application:search-history-use-case
+                        history "status" :contains dispatcher)))
+          (is (= 2 (length results)))
+          (let ((matching 0))
+            (dolist (entry results)
+              (when (search "status" (nshell.domain.history:entry-text entry))
+                (incf matching)))
+            (is (= 2 matching))))
+        (is (null (nshell.application:drain-events dispatcher)))
+        (is (equal '(:history-searched) (nreverse events)))))))
 
 (test pbt-history-suggestion-prefers-successful-prefix-match
   "Generated prefixes choose a non-failing candidate before a newer failure."
@@ -139,54 +133,48 @@ git status")
 git status"
                          "printf 'not a prefix git'"
                          "git push")
-    (let ((dispatcher (nshell.application:make-event-dispatcher))
-          (events nil))
-      (nshell.application:subscribe dispatcher :history-searched
-                                    (lambda (event)
-                                      (push (nshell.domain.events:event-type event) events)))
-      (let ((results (nshell.application:interactive-history-search-use-case
-                      history "git" dispatcher)))
-        (is (equal '("git push"
-                     "echo setup
+    (let ((dispatcher (nshell.application:make-event-dispatcher)))
+      (with-event-capture (events dispatcher :history-searched)
+          (nshell.domain.events:domain-event-type event)
+        (let ((results (nshell.application:interactive-history-search-use-case
+                        history "git" dispatcher)))
+          (is (equal '("git push"
+                       "echo setup
 git status"
-                     "printf 'not a prefix git'")
-                   (history-result-texts results))))
-      (is (null (nshell.application:drain-events dispatcher)))
-      (is (equal '(:history-searched) (nreverse events))))))
+                       "printf 'not a prefix git'")
+                     (nshell.domain.history:history-entry-texts results))))
+        (is (null (nshell.application:drain-events dispatcher)))
+        (is (equal '(:history-searched) (nreverse events)))))))
 
 (test interactive-history-search-ignores-blank-query
   "Interactive reverse search should not preselect history before the user types."
   (with-history (history "git status" "docker ps")
-    (let ((dispatcher (nshell.application:make-event-dispatcher))
-          (events nil))
-      (nshell.application:subscribe dispatcher :history-searched
-                                    (lambda (event)
-                                      (push (nshell.domain.events:event-type event) events)))
-      (is (null (nshell.application:interactive-history-search-use-case
-                 history "" dispatcher)))
-      (is (null (nshell.application:interactive-history-search-use-case
-                 history "|" dispatcher)))
-      (is (null (nshell.application:interactive-history-search-use-case
-                 history "&&" dispatcher)))
-      (is (null (nshell.application:drain-events dispatcher)))
-      (is (equal '(:history-searched :history-searched :history-searched)
-                 (nreverse events))))))
+    (let ((dispatcher (nshell.application:make-event-dispatcher)))
+      (with-event-capture (events dispatcher :history-searched)
+          (nshell.domain.events:domain-event-type event)
+        (is (null (nshell.application:interactive-history-search-use-case
+                   history "" dispatcher)))
+        (is (null (nshell.application:interactive-history-search-use-case
+                   history "|" dispatcher)))
+        (is (null (nshell.application:interactive-history-search-use-case
+                   history "&&" dispatcher)))
+        (is (null (nshell.application:drain-events dispatcher)))
+        (is (equal '(:history-searched :history-searched :history-searched)
+                   (nreverse events)))))))
 
 (test pbt-interactive-history-search-ignores-operator-only-query
   "Generated shell-operator-only input should behave like blank input."
   (with-history (history "git status" "docker ps")
-    (let ((dispatcher (nshell.application:make-event-dispatcher))
-          (events nil))
-      (nshell.application:subscribe dispatcher :history-searched
-                                    (lambda (event)
-                                      (push (nshell.domain.events:event-type event) events)))
-      (for-all-property (:trials 50)
-          ((query (gen-shell-operator-only-input :min-length 1 :max-length 8)))
-        (is (null (nshell.application:interactive-history-search-use-case
-                   history query dispatcher))
-            "Interactive reverse search should ignore generated operator-only query ~s"
-            query))
-      (is (null (nshell.application:drain-events dispatcher)))
-      (is (equal 50 (length events)))
-      (is (every (lambda (event) (eql event :history-searched))
-                 events)))))
+    (let ((dispatcher (nshell.application:make-event-dispatcher)))
+      (with-event-capture (events dispatcher :history-searched)
+          (nshell.domain.events:domain-event-type event)
+        (for-all-property (:trials 50)
+            ((query (gen-shell-operator-only-input :min-length 1 :max-length 8)))
+          (is (null (nshell.application:interactive-history-search-use-case
+                     history query dispatcher))
+              "Interactive reverse search should ignore generated operator-only query ~s"
+              query))
+        (is (null (nshell.application:drain-events dispatcher)))
+        (is (equal 50 (length events)))
+         (is (every (lambda (event) (eql event :history-searched))
+                    events))))))

@@ -27,10 +27,22 @@
 (test autosuggest-completes-argument-from-rules
   (let ((history (nshell.domain.history:make-command-history))
         (kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command kb "git" :flags '("status"))
     (is (string= "atus"
                  (nshell.presentation:compute-suggestion
                   history
                   "git st"
+                  :knowledge-base kb)))))
+
+(test autosuggest-extends-command-prefix-across-multiple-candidates
+  (let ((history (nshell.domain.history:make-command-history))
+        (kb (nshell.domain.completion:make-knowledge-base)))
+    (nshell.domain.completion:kb-add-command kb "git")
+    (nshell.domain.completion:kb-add-command kb "gite")
+    (is (string= "t"
+                 (nshell.presentation:compute-suggestion
+                  history
+                  "gi"
                   :knowledge-base kb)))))
 
 (test autosuggest-does-not-repeat-exact-candidate
@@ -113,6 +125,39 @@ git status --short")
                     history
                     "cd s"
                     :knowledge-base kb))))))
+
+(test autosuggest-escapes-filesystem-argument-tail
+  (let ((history (nshell.domain.history:make-command-history))
+        (kb (nshell.domain.completion:make-knowledge-base)))
+    (with-file-completion-adapters
+        ((lambda (dir)
+           (declare (ignore dir))
+           (list #p"my file.lisp"))
+         (lambda (dir)
+           (declare (ignore dir))
+           nil))
+      (is (string= "\\ file.lisp"
+                   (nshell.presentation:compute-suggestion
+                    history
+                    "source my"
+                    :knowledge-base kb))))))
+
+(test autosuggest-keeps-quoted-filesystem-argument-raw
+  (let ((history (nshell.domain.history:make-command-history))
+        (kb (nshell.domain.completion:make-knowledge-base)))
+    (with-file-completion-adapters
+        ((lambda (dir)
+           (declare (ignore dir))
+           (list #p"my file.lisp"))
+         (lambda (dir)
+           (declare (ignore dir))
+           nil))
+      (dolist (input '("source 'my" "source \"my"))
+        (is (string= " file.lisp"
+                     (nshell.presentation:compute-suggestion
+                      history
+                      input
+                      :knowledge-base kb)))))))
 
 (test autosuggest-completes-source-filesystem-arguments
   (let ((history (nshell.domain.history:make-command-history))

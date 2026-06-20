@@ -85,8 +85,6 @@
                    role)))
               tokens))))
 
-(defun highlight-role (span) (highlight-span-role span))
-
 ;; Rendering helpers for highlight spans.
 (defun fallback-highlight-control (role)
   (or (cdr (assoc role +fallback-highlight-ansi+ :test #'eq))

@@ -25,14 +25,18 @@
     (dolist (line '("cmd1" "cmd2" "cmd3" "cmd4"))
       (nshell.domain.history:history-add history line))
     (is (= 3 (nshell.domain.history:history-size history)))
-    (is (equal '("cmd4" "cmd3" "cmd2") (history-entry-texts history)))))
+    (is (equal '("cmd4" "cmd3" "cmd2")
+               (nshell.domain.history:history-entry-texts
+                (nshell.domain.history:history-all history))))))
 
 (test history-delete-and-clear
   "History entries can be deleted exactly and cleared."
   (let ((history (history-with-lines "git status" "git commit")))
     (is (= 1 (nshell.domain.history:history-delete history "git status")))
     (is (= 1 (nshell.domain.history:history-size history)))
-    (is (equal '("git commit") (history-entry-texts history)))
+    (is (equal '("git commit")
+               (nshell.domain.history:history-entry-texts
+                (nshell.domain.history:history-all history))))
     (nshell.domain.history:history-clear history)
     (is (nshell.domain.history:history-empty-p history))))
 

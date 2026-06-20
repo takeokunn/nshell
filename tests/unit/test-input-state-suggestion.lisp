@@ -136,6 +136,22 @@
       " | less"
       :suggest-update))
 
+(test input-state-alt-right-at-eol-accepts-multi-digit-fd-redirection
+  (with-expected-suggestion-reduction (new-state output)
+      ("grep error log" 14 " 2>&10 | less" :alt-right)
+      "grep error log 2>&10"
+      20
+      " | less"
+      :suggest-update))
+
+(test input-state-alt-right-at-eol-accepts-closed-fd-redirection
+  (with-expected-suggestion-reduction (new-state output)
+      ("grep error log" 14 " 2>&- | less" :alt-right)
+      "grep error log 2>&-"
+      19
+      " | less"
+      :suggest-update))
+
 (test input-state-alt-right-at-eol-accepts-attached-redirection-target
   (with-expected-suggestion-reduction (new-state output)
       ("echo hi" 7 " >out.txt && cat out.txt" :alt-right)
@@ -155,19 +171,19 @@
     (is-input-state new-state :suggestion nil)))
 
 (test input-state-normalize-clamps-cursor-and-keeps-other-slots
-  (let* ((state (input-state
-                 :buffer "git"
-                 :cursor-pos 99
-                 :suggestion " status"
-                 :search-query "g"
-                 :completion-index 2))
-         (normalized (nshell.presentation::normalize-input-state state)))
-    (is-input-state normalized
-                    :buffer "git"
-                    :cursor-pos 3
-                    :suggestion " status"
-                    :completion-index 2)
-    (is (string= "g" (nshell.presentation:input-state-search-query normalized)))))
+  (let ((state (input-state
+                :buffer "git"
+                :cursor-pos 99
+                :suggestion " status"
+                :search-query "g"
+                :completion-index 2)))
+    (nshell.presentation:with-normalized-input-state (normalized state)
+      (is-input-state normalized
+                      :buffer "git"
+                      :cursor-pos 3
+                      :suggestion " status"
+                      :completion-index 2)
+      (is (string= "g" (nshell.presentation:input-state-search-query normalized))))))
 
 (test input-state-ctrl-g-cancels-visible-suggestion-without-editing
   (with-expected-suggestion-reduction (new-state output)

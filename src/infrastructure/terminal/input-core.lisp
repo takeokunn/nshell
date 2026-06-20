@@ -35,9 +35,9 @@
   (127 . :alt-backspace))
 
 (define-key-event-specs +meta-char-specs+
-  (#\b . :alt-left)
+  (#\b . :alt-b)
   (#\c . :alt-c)
-  (#\f . :alt-right)
+  (#\f . :alt-f)
   (#\d . :alt-d)
   (#\l . :alt-l)
   (#\r . :alt-r)

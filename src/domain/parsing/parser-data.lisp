@@ -1,5 +1,10 @@
 (in-package #:nshell.domain.parsing)
 
+(defparameter +redirect-specs+
+  '((">" . :>)
+    (">>" . :>>)
+    ("<" . :<)))
+
 (defparameter +separator-rules+
   '((:pipe :token-type :pipe :text "|" :continues t)
     (:and :token-type :and :text "&&" :continues t)

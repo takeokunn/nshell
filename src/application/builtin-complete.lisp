@@ -8,13 +8,6 @@
     ("-d" :kind :description :requirement "description")
     ("--description" :kind :description :requirement "description")))
 
-(defmacro %with-complete-argument ((return-target remaining option requirement) &body body)
-  `(if (rest ,remaining)
-       (progn ,@body)
-       (return-from ,return-target
-         (values nil nil nil
-                 (%required-argument-error "complete" ,option ,requirement)))))
-
 (defun %complete-option-spec (option)
   (cdr (assoc option +complete-option-specs+ :test #'string=)))
 
@@ -39,14 +32,18 @@
       (return)
       ((%complete-option-spec option)
        (let ((spec (%complete-option-spec option)))
-         (%with-complete-argument (%parse-complete-args remaining option
-                                                         (getf spec :requirement))
-           (multiple-value-bind (new-command new-flags new-description new-remaining)
-               (%complete-apply-option spec remaining command flags description)
-             (setf command new-command
-                   flags new-flags
-                   description new-description
-                   remaining new-remaining))))))
+         (if (rest remaining)
+             (multiple-value-bind (new-command new-flags new-description new-remaining)
+                 (%complete-apply-option spec remaining command flags description)
+               (setf command new-command
+                     flags new-flags
+                     description new-description
+                     remaining new-remaining))
+             (return-from %parse-complete-args
+               (values nil nil nil
+                       (%required-argument-error "complete"
+                                                 option
+                                                 (getf spec :requirement))))))))
     (values command (nreverse flags) description nil)))
 
 (defun %builtin-complete (context args)
@@ -54,7 +51,7 @@
       (%parse-complete-args args)
     (cond
       (error
-       (values (format nil "~a~%" error) 2))
+       (values error 2))
       ((null command)
        (%builtin-usage "complete" "complete -c command [-f flag ...] [-d description]"))
       (t

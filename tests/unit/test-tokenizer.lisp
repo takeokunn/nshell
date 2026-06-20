@@ -6,84 +6,77 @@
 
 (in-suite tokenizer-tests)
 
+(defmacro with-tokenized-input ((tokens cursor incomplete) input &body body)
+  `(multiple-value-bind (,tokens ,cursor ,incomplete)
+       (nshell.domain.parsing:tokenize ,input)
+     ,@body))
+
 (test simple-command
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "ls -la")
+  (with-tokenized-input (tokens cursor incomplete) "ls -la"
     (declare (ignore cursor incomplete))
     (is (= 2 (length tokens)))
     (is (string= "ls" (nshell.domain.parsing:token-value (first tokens))))))
 
 (test pipeline
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "ls | grep foo")
+  (with-tokenized-input (tokens cursor incomplete) "ls | grep foo"
     (declare (ignore cursor incomplete))
     (is (= 4 (length tokens)))
     (is (eq :pipe (nshell.domain.parsing:token-type (second tokens))))))
 
 (test redirect
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo hello > file.txt")
+  (with-tokenized-input (tokens cursor incomplete) "echo hello > file.txt"
     (declare (ignore cursor incomplete))
     (is (eq :redirect (nshell.domain.parsing:token-type (third tokens))))))
 
 (test double-quoted-string
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo \"hello world\"")
+  (with-tokenized-input (tokens cursor incomplete) "echo \"hello world\""
     (declare (ignore cursor incomplete))
     (is (string= "hello world" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test escaped-space-word
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo hello\\ world")
+  (with-tokenized-input (tokens cursor incomplete) "echo hello\\ world"
     (declare (ignore cursor incomplete))
     (is (= 2 (length tokens)))
     (is (string= "hello world" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test hash-in-word-remains-literal
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo foo#bar")
+  (with-tokenized-input (tokens cursor incomplete) "echo foo#bar"
     (declare (ignore cursor incomplete))
     (is (= 2 (length tokens)))
     (is (string= "foo#bar" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test hash-at-boundary-starts-comment
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo foo #bar")
+  (with-tokenized-input (tokens cursor incomplete) "echo foo #bar"
     (declare (ignore cursor incomplete))
     (is (= 2 (length tokens)))
     (is (string= "foo" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test incomplete-quote
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo 'hello")
+  (with-tokenized-input (tokens cursor incomplete) "echo 'hello"
     (declare (ignore tokens cursor))
     (is (not (null incomplete)))))
 
 (test append-redirect
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo >> log")
+  (with-tokenized-input (tokens cursor incomplete) "echo >> log"
     (declare (ignore cursor incomplete))
     (is (string= ">>" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test single-redirect-at-end
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize ">")
+  (with-tokenized-input (tokens cursor incomplete) ">"
     (declare (ignore cursor incomplete))
     (is (= 1 (length tokens)))
     (is (eq :redirect (nshell.domain.parsing:token-type (first tokens))))
     (is (string= ">" (nshell.domain.parsing:token-value (first tokens))))))
 
 (test bare-parentheses-tokenize-with-progress
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "()")
+  (with-tokenized-input (tokens cursor incomplete) "()"
     (declare (ignore cursor incomplete))
     (is (= 2 (length tokens)))
     (is (eq :lparen (nshell.domain.parsing:token-type (first tokens))))
     (is (eq :rparen (nshell.domain.parsing:token-type (second tokens))))))
 
 (test command-substitution-tokenizes-as-word-when-balanced
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo (echo ok)")
+  (with-tokenized-input (tokens cursor incomplete) "echo (echo ok)"
     (declare (ignore cursor))
     (is (null incomplete))
     (is (= 2 (length tokens)))
@@ -91,8 +84,7 @@
     (is (string= "(echo ok)" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test trailing-backslash-is-incomplete
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "echo \\")
+  (with-tokenized-input (tokens cursor incomplete) "echo \\"
     (declare (ignore cursor))
     (is (not (null incomplete)))
     (is (= 2 (length tokens)))
@@ -101,8 +93,7 @@
     (is (= 6 (nshell.domain.parsing:token-end (second tokens))))))
 
 (test process-substitution-tokenizes-as-word-when-balanced
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "cat <(echo ok)")
+  (with-tokenized-input (tokens cursor incomplete) "cat <(echo ok)"
     (declare (ignore cursor))
     (is (null incomplete))
     (is (= 2 (length tokens)))
@@ -110,8 +101,7 @@
     (is (string= "<(echo ok)" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test process-substitution-treats-quoted-parens-as-literals
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "cat <(printf \"(\")")
+  (with-tokenized-input (tokens cursor incomplete) "cat <(printf \"(\")"
     (declare (ignore cursor))
     (is (null incomplete))
     (is (= 2 (length tokens)))
@@ -119,8 +109,7 @@
     (is (string= "<(printf \"(\")" (nshell.domain.parsing:token-value (second tokens))))))
 
 (test unbalanced-process-substitution-is-incomplete-error-token
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "cat <(echo ok")
+  (with-tokenized-input (tokens cursor incomplete) "cat <(echo ok"
     (declare (ignore cursor))
     (is (not (null incomplete)))
     (is (= 2 (length tokens)))
@@ -130,16 +119,14 @@
     (is (= 13 (nshell.domain.parsing:token-end (second tokens))))))
 
 (test empty-input
-  (multiple-value-bind (tokens cursor incomplete)
-      (nshell.domain.parsing:tokenize "")
+  (with-tokenized-input (tokens cursor incomplete) ""
     (declare (ignore cursor incomplete))
     (is (null tokens))))
 
 (test pbt-tokenizer-spans-are-monotonic-and-in-bounds
   "Token spans are monotonic and remain within the generated input bounds."
   (for-all-property (:trials 50) ((input (gen-shell-pipeline)))
-    (multiple-value-bind (tokens cursor incomplete)
-        (nshell.domain.parsing:tokenize input)
+    (with-tokenized-input (tokens cursor incomplete) input
       (declare (ignore cursor incomplete))
       (is (loop with previous-end = 0
                 for token in tokens

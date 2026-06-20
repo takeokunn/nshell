@@ -12,7 +12,7 @@
          (job (make-test-job 0 "echo" :args '("hello"))))
     (nshell.domain.job-control:monitor-add-job monitor job)
     (let ((nshell.application:*job-monitor* monitor))
-      (let ((output (with-output-to-string (*standard-output*)
+      (let ((output (capture-standard-output
                       (let ((entries (nshell.application:jobs)))
                         (is (= 1 (length entries)))))))
         (is (search "[0]" output))
@@ -27,14 +27,13 @@
          (job-id (nshell.domain.job-control:monitor-add-job monitor job))
          (continued nil)
          (nshell.application:*job-monitor* monitor))
-    (nshell.application:subscribe dispatcher :job-continued
-                                  (lambda (event)
-                                    (push (nshell.domain.events:event-type event) continued)))
-    (is (eq job (nshell.application:bg job-id dispatcher)))
-    (is (eq :background (nshell.domain.execution:job-state job)))
-    (is (nshell.domain.execution:job-background-p job))
-    (is (null (nshell.application:drain-events dispatcher)))
-    (is (equal '(:job-continued) (nreverse continued)))))
+    (with-event-capture (continued dispatcher :job-continued)
+        (nshell.domain.events:domain-event-type event)
+      (is (eq job (nshell.application:bg job-id dispatcher)))
+      (is (eq :background (nshell.domain.execution:job-state job)))
+      (is (nshell.domain.execution:job-background-p job))
+      (is (null (nshell.application:drain-events dispatcher)))
+      (is (equal '(:job-continued) (nreverse continued))))))
 
 (test disown-removes-job-from-monitor
   "DISOWN removes a tracked job and returns true for an existing id."

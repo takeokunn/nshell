@@ -16,9 +16,6 @@
             (nshell.domain.environment:inject-os-environment
              (nshell.domain.environment:make-default-environment)))))
 
-(defun completion-path ()
-  (nshell.domain.environment:env-get (ensure-environment) "PATH"))
-
 (defun executable-path-p (path)
   (handler-case
       (zerop (sb-posix:access (namestring path) sb-posix:x-ok))

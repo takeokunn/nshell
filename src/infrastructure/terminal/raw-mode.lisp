@@ -10,6 +10,10 @@
       (let ((termios (sb-posix:tcgetattr 0)))
         (setf *saved-termios* termios)
         (let ((raw (sb-posix:tcgetattr 0)))
+          (setf (sb-posix:termios-iflag raw)
+                (logand (sb-posix:termios-iflag raw)
+                        (lognot (logior sb-posix:ixon
+                                        sb-posix:ixoff))))
           (setf (sb-posix:termios-lflag raw)
                 (logand (sb-posix:termios-lflag raw)
                         (lognot (logior sb-posix:icanon sb-posix:echo))))

@@ -16,8 +16,8 @@
 
 (defstruct (sequence-node (:include ast-node)
                            (:constructor make-sequence-node (commands &optional separators span)))
-  "Represents ;-separated sequential commands or &-separated background commands.
-   SEPARATORS is a list of :semi or :amp keywords, one per command except the last."
+  "Represents shell command sequences separated by ;, &, &&, or ||.
+   SEPARATORS is a list of :semi, :amp, :and, or :or keywords, one per command except the last."
   (commands nil :type list :read-only t)
   (separators nil :type list :read-only t))
 
@@ -65,27 +65,6 @@
   (partial-text "" :type string :read-only t)
   (kind :unknown :type keyword :read-only t))
 
-
-(defun ast-complete-p (node)
-  (not (or (error-node-p node) (incomplete-node-p node))))
-
-(defun ast-has-errors-p (node)
-  (labels ((check (n)
-               (cond ((error-node-p n) t)
-                     ((pipeline-node-p n) (some #'check (pipeline-node-commands n)))
-                     ((sequence-node-p n) (some #'check (sequence-node-commands n)))
-                     ((if-node-p n) (or (check (if-node-condition n))
-                                        (some #'check (if-node-then-branch n))
-                                        (some #'check (if-node-else-branch n))))
-                     ((for-node-p n) (some #'check (for-node-body n)))
-                     ((while-node-p n) (or (check (while-node-condition n))
-                                           (some #'check (while-node-body n))))
-                     ((case-node-p n) (some (lambda (clause)
-                                              (some #'check (cdr clause)))
-                                            (case-node-clauses n)))
-                     ((begin-end-node-p n) (some #'check (begin-end-node-body n)))
-                     (t nil))))
-    (check node)))
 
 ;; -- Arg utilities (cons-based arg support) -----------------
 (defun arg-value (arg)

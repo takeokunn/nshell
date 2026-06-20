@@ -1,18 +1,4 @@
-;;; History builtin implementation and helpers
 (in-package #:nshell.application)
-
-(defparameter +history-search-option-specs+
-  '(("--prefix" :mode :prefix)
-    ("--contains" :mode :contains)
-    ("--exact" :mode :exact)
-    ("--case-sensitive" :case-sensitive t)))
-
-(defparameter +history-subcommand-specs+
-  '(("search" :handler %history-search)
-    ("delete" :handler %history-delete)
-    ("clear" :handler %history-clear)
-    ("size" :handler %history-size)))
-
 (defun %history-usage ()
   (%builtin-usage
    "history"
@@ -23,9 +9,6 @@
     (with-output-to-string (out)
       (dolist (entry entries)
         (format out "~a~%" (nshell.domain.history:entry-text entry))))))
-
-(defun %history-subcommand-spec (command)
-  (cdr (assoc command +history-subcommand-specs+ :test #'string=)))
 
 (defun %history-search-options (args)
   (labels ((parse (remaining mode case-sensitive)
@@ -50,19 +33,19 @@
       (%history-search-options args)
     (if query-parts
         (values
-         (%history-format-entries
+      (%history-format-entries
           (nshell.domain.history:history-search
-           history (%join-command-args query-parts)
-           :mode mode
-           :case-sensitive case-sensitive
-           :smartcase (not case-sensitive)))
+            history (%string-join query-parts " ")
+            :mode mode
+            :case-sensitive case-sensitive
+            :smartcase (not case-sensitive)))
          0)
         (values (%history-usage) 1))))
 
 (defun %history-delete (history args)
   (if args
       (let ((deleted (nshell.domain.history:history-delete
-                      history (%join-command-args args))))
+                      history (%string-join args " "))))
         (values (format nil "~d~%" deleted) 0))
       (values (%history-usage) 1)))
 
@@ -79,7 +62,9 @@
   (let ((history (shell-context-history context)))
     (if (null args)
         (%history-list history)
-        (let ((spec (%history-subcommand-spec (first args))))
+        (let ((spec (cdr (assoc (first args)
+                                +history-subcommand-specs+
+                                :test #'string=))))
           (if spec
               (funcall (getf spec :handler) history (rest args))
               (values (%history-usage) 1))))))

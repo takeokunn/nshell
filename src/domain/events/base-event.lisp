@@ -11,11 +11,6 @@
                         ,(when args `(declare (ignore ,@args)))
                         (make-domain-event ,type)))))
 
-(defun event-type (event) (domain-event-type event))
-(defun event-timestamp (event) (domain-event-timestamp event))
-(defun event-type-p (event expected) (eq (domain-event-type event) expected))
-(defun make-event (type &optional ts) (make-domain-event type ts))
-
 (define-event-constructors
   (make-command-entered-event :command-entered (text))
   (make-command-parsed-event :command-parsed (ast))

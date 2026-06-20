@@ -5,16 +5,20 @@
 (defun read-key-cont ()
   (let ((event (nshell.infrastructure.terminal:read-key-event)))
     (if event
-        (lambda () (process-key-cont event))
+      (lambda ()
+          (multiple-value-bind (new-state output-event)
+              (reduce-input-state *input-state* event)
+            (setf *input-state* new-state)
+            (process-output-event output-event)))
         (progn
           (setf *running* nil)
-          (done)))))
+          nil))))
 
 ;; REPL Entry
 (defun run-repl ()
   (initialize-repl-state)
   (install-interactive-terminal)
   (unwind-protect
-      (trampoline (render-prompt-continuation))
+      (trampoline (lambda () (render-prompt-cont)))
     (restore-interactive-terminal)
     (format t "Goodbye!~%")))

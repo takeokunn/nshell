@@ -9,6 +9,7 @@
 (defun initialize-repl-state ()
   (setf *running* t
         *last-exit-code* 0
+        *last-command-duration-ms* nil
         *history* (nshell.domain.history:make-command-history)
         *config* (nshell.domain.configuration:default-config)
         *kb* (nshell.domain.completion:make-knowledge-base)
@@ -21,6 +22,7 @@
         *aliases* (make-hash-table :test #'equal)
         *abbreviations* (make-hash-table :test #'equal)
         *functions* (make-hash-table :test #'equal)
+        *function-sources* (make-hash-table :test #'equal)
         *proc-registry* (make-hash-table :test #'eql))
   (install-expansion-filesystem)
   (configure-completion-filesystem)

@@ -26,17 +26,23 @@
                                          :branch nil)))
       (is (search "12:34" output)))))
 
+(test render-prompt-renders-duration-in-right-prompt
+  "The presentation layer should surface the last-command duration segment."
+  (let ((output (capture-render-prompt :terminal-width (+ (current-left-prompt-width) 12)
+                                       :branch nil
+                                       :duration-ms 123)))
+    (is (search "123ms" output))))
+
 (test render-prompt-returns-left-visible-width
   "The prompt renderer reports the left prompt width for edit-buffer cursor placement."
-  (let ((reported-width nil))
-    (let ((nshell.domain.prompting:*git-status-resolver*
-            (lambda (dir)
-              (declare (ignore dir))
-              (values nil nil))))
-      (with-output-to-string (*standard-output*)
-        (setf reported-width
-              (nshell.presentation:render-prompt
-               (nshell.domain.configuration:default-config)
-               0
-               :terminal-width 80))))
-    (is (= (current-left-prompt-width) reported-width))))
+  (multiple-value-bind (output results)
+      (call-render-prompt :terminal-width 80)
+    (declare (ignore output))
+    (is (= (current-left-prompt-width)
+           (first results)))))
+
+(test home-prefix-only-matches-path-boundaries
+  "Home-directory shortening should not trigger on plain string prefixes."
+  (is (nshell.presentation::%home-prefix-p "/Users/take" "/Users/take"))
+  (is (nshell.presentation::%home-prefix-p "/Users/take" "/Users/take/projects"))
+  (is (not (nshell.presentation::%home-prefix-p "/Users/take" "/Users/takefoo"))))

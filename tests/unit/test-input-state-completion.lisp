@@ -94,6 +94,20 @@
                       :completion-base-cursor 8)
       (is (eq :complete output)))))
 
+(test input-state-tab-completes-closed-quoted-token-without-dropping-closing-quote
+  (let ((state (input-state
+                :buffer "echo \"he\""
+                :cursor-pos 9
+                :completion-index -1
+                :last-candidates '("hello world" "hello there"))))
+    (multiple-value-bind (new-state output) (reduce-once state :tab)
+      (is-input-state new-state
+                      :buffer "echo \"hello world\""
+                      :cursor-pos 17
+                      :completion-base-buffer "echo \"he\""
+                      :completion-base-cursor 9)
+      (is (eq :complete output)))))
+
 (test input-state-tab-completes-single-quoted-token-without-escaping-spaces
   (let ((state (input-state
                 :buffer "echo 'he"

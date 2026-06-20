@@ -33,8 +33,7 @@
       (destructuring-bind (line . expected-format) case
         (setf nshell.presentation::*input-state*
               (nshell.presentation::make-repl-input-state :buffer line))
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event :execute))
+        (capture-process-output-event :execute)
         (is (string= (format nil expected-format)
                      (nshell.presentation:input-state-buffer
                       nshell.presentation::*input-state*)))
@@ -48,7 +47,7 @@
   (let* ((spans (nshell.presentation:highlight-line "| echo nope"))
          (first-span (first spans)))
     (is (not (null first-span)))
-    (is (eq :error (nshell.presentation:highlight-role first-span)))
+    (is (eq :error (nshell.presentation:highlight-span-role first-span)))
     (is (= 0 (nshell.presentation:highlight-span-start first-span)))
     (is (= 1 (nshell.presentation:highlight-span-end first-span)))))
 
@@ -125,8 +124,7 @@
            (input-key-event :up))
         (is (eq :history-prev output))
         (setf nshell.presentation::*input-state* next-state)
-        (with-output-to-string (*standard-output*)
-          (nshell.presentation::process-output-event output)))
+        (capture-process-output-event output))
       (is-input-state nshell.presentation::*input-state*
                       :buffer "git st"
                       :cursor-pos 6

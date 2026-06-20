@@ -2,6 +2,58 @@
 
 (in-suite builtin-tests)
 
+(defun %source-sequence-call-order (separator first-code second-code)
+  (let ((context (make-test-builtins-context))
+        (calls nil))
+    (with-temporary-function
+        ('nshell.application::execute-ast-in-context
+         (lambda (_context ast)
+           (declare (ignore _context))
+           (let ((command (nshell.domain.parsing:command-node-command ast)))
+             (push command calls)
+             (values nil (if (string= command "first")
+                             first-code
+                             second-code)))))
+      (let ((ast (nshell.domain.parsing::make-sequence-node
+                  (list (nshell.domain.parsing:make-command-node "first" nil)
+                        (nshell.domain.parsing:make-command-node "second" nil))
+                  (list separator))))
+        (multiple-value-bind (output code)
+            (nshell.application::%execute-sequence-node-in-context context ast)
+          (values output code (nreverse calls)))))))
+
+(test source-sequence-and-short-circuits-on-failure
+  "source stops a sequence after a failing && command."
+  (multiple-value-bind (output code calls)
+      (%source-sequence-call-order :and 1 0)
+    (is (string= "" output))
+    (is (= 1 code))
+    (is (equal '("first") calls))))
+
+(test source-sequence-and-continues-on-success
+  "source continues past a successful && command."
+  (multiple-value-bind (output code calls)
+      (%source-sequence-call-order :and 0 0)
+    (is (string= "" output))
+    (is (= 0 code))
+    (is (equal '("first" "second") calls))))
+
+(test source-sequence-or-short-circuits-on-success
+  "source stops a sequence after a successful || command."
+  (multiple-value-bind (output code calls)
+      (%source-sequence-call-order :or 0 0)
+    (is (string= "" output))
+    (is (= 0 code))
+    (is (equal '("first") calls))))
+
+(test source-sequence-or-continues-on-failure
+  "source continues past a failing || command."
+  (multiple-value-bind (output code calls)
+      (%source-sequence-call-order :or 1 0)
+    (is (string= "" output))
+    (is (= 0 code))
+    (is (equal '("first" "second") calls))))
+
 (test source-function-body-supports-nested-control-flow
   "source keeps nested blocks inside function definitions instead of closing at the first end."
   (with-builtins-source (output code context
@@ -168,6 +220,26 @@
                         (nshell.application:shell-context-function-table
                          context))))))
 
+(test source-function-body-supports-nested-begin
+  "source keeps nested begin/end blocks inside function definitions."
+  (with-builtins-source (output code context
+                                 '("function wrap"
+                                   "begin"
+                                   "echo function-begin"
+                                   "end"
+                                   "echo after-begin"
+                                   "end"
+                                   "wrap"))
+    (is (= 0 code))
+    (is (string= (format nil "function-begin~%after-begin~%") output))
+    (is (equal '("begin"
+                 "echo function-begin"
+                 "end"
+                 "echo after-begin")
+               (gethash "wrap"
+                        (nshell.application:shell-context-function-table
+                         context))))))
+
 (test source-pipeline-feeds-builtin-output-to-read
   "source executes builtin pipeline stages in the current shell context."
   (with-builtins-source (output code context
@@ -238,3 +310,100 @@
                      (nshell.domain.environment:env-get
                       (nshell.application:shell-context-environment context)
                       "captured")))))))
+
+(test source-pipeline-uses-source-strategy-for-external-pipelines
+  "source keeps external pipelines on the source execution path when strategy is :cps."
+  (let ((context (make-test-builtins-context)))
+    (setf (nshell.application:shell-context-execution-strategy context) :cps)
+    (with-temporary-function
+        ('nshell.infrastructure.acl:spawn-pipeline
+         (lambda (&rest _args)
+           (declare (ignore _args))
+           (error "spawn-pipeline should not run for :cps")))
+      (with-called-source (output code context
+                                  '("/bin/echo cps-strategy | /bin/cat"))
+        (is (= 0 code))
+        (is (string= (format nil "cps-strategy~%") output))))))
+
+(test source-pipeline-uses-os-pipes-strategy-for-external-pipelines
+  "source dispatches external pipelines to spawn-pipeline when strategy is :os-pipes."
+  (let ((context (make-test-builtins-context))
+        (called nil)
+        (command-count nil)
+        (captured-redirects nil))
+    (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
+    (with-temporary-function
+        ('nshell.infrastructure.acl:spawn-pipeline
+         (lambda (commands &key redirects)
+           (setf called t
+                 command-count (length commands)
+                 captured-redirects redirects)
+           (format t "spawned-path~%")
+           37))
+      (with-called-source (output code context
+                                  '("/bin/echo os-pipes-strategy | /bin/cat"))
+        (is (not (null called)))
+        (is (= 2 command-count))
+        (is (listp captured-redirects))
+        (is (= 37 code))
+        (is (string= (format nil "spawned-path~%") output))))))
+
+(test source-pipeline-keeps-internal-commands-on-source-path-under-os-pipes
+  "source still executes pipelines with internal commands through the source path even when strategy is :os-pipes."
+  (let ((context (make-test-builtins-context)))
+    (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
+    (with-temporary-function
+        ('nshell.infrastructure.acl:spawn-pipeline
+         (lambda (&rest _args)
+           (declare (ignore _args))
+           (error "spawn-pipeline should not run for internal commands")))
+      (with-called-source (output code context
+                                  '("echo internal-value | read captured"))
+        (is (= 0 code))
+        (is (string= "" output))
+        (is (string= "internal-value"
+                     (nshell.domain.environment:env-get
+                      (nshell.application:shell-context-environment context)
+                      "captured")))))))
+
+(test pbt-source-pipeline-keeps-external-only-pipelines-on-source-path-under-cps
+  "Generated external-only pipelines stay on the source path when strategy is :cps."
+  (check-property (:trials 50)
+      ((payload (gen-shell-word :min-length 1 :max-length 8)
+                #'shrink-prompt-text))
+    (let ((context (make-test-builtins-context))
+          (spawned nil))
+      (setf (nshell.application:shell-context-execution-strategy context) :cps)
+      (with-temporary-function
+          ('nshell.infrastructure.acl:spawn-pipeline
+           (lambda (&rest _args)
+             (declare (ignore _args))
+             (setf spawned t)
+             (error "spawn-pipeline should not run for :cps")))
+        (with-called-source (output code context
+                                (list (format nil "/bin/echo ~a | /bin/cat" payload)))
+          (is (not spawned))
+          (is (= 0 code))
+          (is (string= (format nil "~a~%" payload) output)))))))
+
+(test pbt-source-pipeline-routes-external-only-pipelines-to-spawn-pipeline-under-os-pipes
+  "Generated external-only pipelines route through spawn-pipeline when strategy is :os-pipes."
+  (check-property (:trials 50)
+      ((payload (gen-shell-word :min-length 1 :max-length 8)
+                #'shrink-prompt-text))
+    (let ((context (make-test-builtins-context))
+          (called nil))
+      (setf (nshell.application:shell-context-execution-strategy context) :os-pipes)
+      (with-temporary-function
+          ('nshell.infrastructure.acl:spawn-pipeline
+           (lambda (commands &key redirects)
+             (setf called t)
+             (is (= 2 (length commands)))
+             (is (listp redirects))
+             (format t "spawned-path~%")
+             37))
+        (with-called-source (output code context
+                                (list (format nil "/bin/echo ~a | /bin/cat" payload)))
+          (is (not (null called)))
+          (is (= 37 code))
+          (is (search "spawned-path" output)))))))

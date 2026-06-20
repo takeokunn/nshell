@@ -6,24 +6,22 @@
   (with-reduced-input-state (new-state output)
       (reduce-once (input-state :buffer "abc" :cursor-pos 3)
                    :ctrl-r)
-    (is (eq :search (nshell.presentation:input-state-mode new-state)))
-    (is (string= "" (nshell.presentation:input-state-search-query new-state)))
-    (is (string= "abc"
-                 (nshell.presentation:input-state-search-original-buffer
-                  new-state)))
-    (is (= 0 (nshell.presentation:input-state-search-index new-state)))
+    (is-search-state new-state
+                     :mode :search
+                     :query ""
+                     :original-buffer "abc"
+                     :index 0)
     (is (eq :search-start output))))
 
 (test input-state-ctrl-s-enters-search-mode
   (with-reduced-input-state (new-state output)
       (reduce-once (input-state :buffer "abc" :cursor-pos 3)
                    :ctrl-s)
-    (is (eq :search (nshell.presentation:input-state-mode new-state)))
-    (is (string= "" (nshell.presentation:input-state-search-query new-state)))
-    (is (string= "abc"
-                 (nshell.presentation:input-state-search-original-buffer
-                  new-state)))
-    (is (= 0 (nshell.presentation:input-state-search-index new-state)))
+    (is-search-state new-state
+                     :mode :search
+                     :query ""
+                     :original-buffer "abc"
+                     :index 0)
     (is (eq :search-start output))))
 
 (test input-state-ctrl-r-clears-completion-session
@@ -49,8 +47,11 @@
                 :completion-base-cursor 1
                 :last-candidates '("git" "grep"))))
     (with-reduced-input-state (new-state output) (reduce-once state :char #\s)
-      (is (eq :search (nshell.presentation:input-state-mode new-state)))
-      (is (string= "s" (nshell.presentation:input-state-search-query new-state)))
+      (is-search-state new-state
+                       :mode :search
+                       :query "s"
+                       :original-buffer "git"
+                       :index 0)
       (is-completion-session-cleared new-state)
       (is (eq :search-update output)))))
 
@@ -58,13 +59,17 @@
   (with-reduced-input-state (search-state)
       (reduce-once (input-state :buffer "git" :cursor-pos 3)
                    :ctrl-r)
-    (with-reduced-input-state (s-state s-output) (reduce-once search-state :char #\s)
+    (with-reduced-input-state (s-state s-output)
+        (reduce-once search-state :char #\s)
       (is (string= "git" (nshell.presentation:input-state-buffer s-state)))
-      (is (string= "s" (nshell.presentation:input-state-search-query s-state)))
+      (is-search-state s-state :mode :search :query "s")
       (is (eq :search-update s-output))
-      (with-reduced-input-state (t-state) (reduce-once s-state :char #\t)
-        (is (string= "st" (nshell.presentation:input-state-search-query t-state)))
-        (with-reduced-input-state (back-state back-output) (reduce-once t-state :backspace)
+      (with-reduced-input-state (t-state)
+          (reduce-once s-state :char #\t)
+        (is (string= "st"
+                     (nshell.presentation:input-state-search-query t-state)))
+        (with-reduced-input-state (back-state back-output)
+            (reduce-once t-state :backspace)
           (is (string= "s"
                        (nshell.presentation:input-state-search-query back-state)))
           (is (eq :search-update back-output)))))))
@@ -83,23 +88,24 @@
     (with-reduced-input-state (new-state output)
         (reduce-once state :paste nil nil
                      '(:protocol :bracketed :text "atus --short"))
-      (is (eq :search (nshell.presentation:input-state-mode new-state)))
+      (is-search-state new-state
+                       :mode :search
+                       :query "status --short"
+                       :original-buffer "git"
+                       :index 0)
       (is (string= "git" (nshell.presentation:input-state-buffer new-state)))
-      (is (string= "status --short"
-                   (nshell.presentation:input-state-search-query new-state)))
-      (is (= 0 (nshell.presentation:input-state-search-index new-state)))
       (is-completion-session-cleared new-state)
       (is (eq :search-update output)))))
 
-  (test input-state-history-search-cycles-and-applies-results
-    (let* ((state (history-search-state
-                   :query "git"
-                   :original-buffer "g"
-                   :index 1
-                   :completion-index 0
-                   :completion-base-buffer "gi"
-                   :completion-base-cursor 2
-                   :last-candidates '("git" "grep")))
+(test input-state-history-search-cycles-and-applies-results
+  (let* ((state (history-search-state
+                 :query "git"
+                 :original-buffer "g"
+                 :index 1
+                 :completion-index 0
+                 :completion-base-buffer "gi"
+                 :completion-base-cursor 2
+                 :last-candidates '("git" "grep")))
          (matches '("git status" "git log"))
          (applied
            (nshell.presentation:apply-history-search-results-to-input-state
@@ -118,29 +124,32 @@
     (with-reduced-input-state (older older-output) (reduce-once applied :ctrl-p)
       (is (= 2 (nshell.presentation:input-state-search-index older)))
       (is (eq :search-update older-output)))
-      (with-reduced-input-state (newer newer-output) (reduce-once applied :ctrl-n)
-        (is (= 0 (nshell.presentation:input-state-search-index newer)))
-        (is (eq :search-update newer-output)))))
+    (with-reduced-input-state (newer newer-output) (reduce-once applied :ctrl-n)
+      (is (= 0 (nshell.presentation:input-state-search-index newer)))
+      (is (eq :search-update newer-output)))))
 
-  (test input-state-history-search-ignores-non-string-results
-    (let ((state (history-search-state
-                  :query "git"
-                  :original-buffer "g"
-                  :index 1)))
-      (let ((applied
-              (nshell.presentation:apply-history-search-results-to-input-state
-               state '(42 "git status" :ignored "git log"))))
-        (is (string= "git log" (nshell.presentation:input-state-buffer applied)))
-          (is (= 7 (nshell.presentation:input-state-cursor-pos applied)))
-        (is (eq :search (nshell.presentation:input-state-mode applied)))
-        (is (string= "git" (nshell.presentation:input-state-search-query applied))))))
-  
-  (test input-state-history-search-ctrl-s-moves-to-newer-result
-    (let ((state (history-search-state
-                  :buffer "git status"
-                  :query "git"
-                  :original-buffer "g"
-                  :index 2)))
+(test input-state-history-search-ignores-non-string-results
+  (let ((state (history-search-state
+                :query "git"
+                :original-buffer "g"
+                :index 1)))
+    (let ((applied
+            (nshell.presentation:apply-history-search-results-to-input-state
+             state '(42 "git status" :ignored "git log"))))
+      (is (string= "git log" (nshell.presentation:input-state-buffer applied)))
+      (is (= 7 (nshell.presentation:input-state-cursor-pos applied)))
+      (is-search-state applied
+                       :mode :search
+                       :query "git"
+                       :original-buffer "g"
+                       :index 1))))
+
+(test input-state-history-search-ctrl-s-moves-to-newer-result
+  (let ((state (history-search-state
+                :buffer "git status"
+                :query "git"
+                :original-buffer "g"
+                :index 2)))
     (with-reduced-input-state (newer output) (reduce-once state :ctrl-s)
       (is (= 1 (nshell.presentation:input-state-search-index newer)))
       (is (eq :search-update output)))))
@@ -157,20 +166,23 @@
              state '())))
       (is (string= "git status" (nshell.presentation:input-state-buffer restored)))
       (is (= 4 (nshell.presentation:input-state-cursor-pos restored)))
-      (is (eq :search (nshell.presentation:input-state-mode restored)))
-      (is (string= "nomatch" (nshell.presentation:input-state-search-query restored))))))
+      (is-search-state restored
+                       :mode :search
+                       :query "nomatch"
+                       :original-buffer "git status"
+                       :original-cursor 4
+                       :index 2))))
 
 (test input-state-history-search-escape-restores-original-buffer
-  (let* ((state (history-search-state
-                 :buffer "git status"
-                 :query "status"
-                 :original-buffer "git"
-                 :index 0)))
+  (let ((state (history-search-state
+                :buffer "git status"
+                :query "status"
+                :original-buffer "git"
+                :index 0)))
     (with-reduced-input-state (restored output) (reduce-once state :ctrl-g)
       (is (string= "git" (nshell.presentation:input-state-buffer restored)))
       (is (= 3 (nshell.presentation:input-state-cursor-pos restored)))
-      (is (eq :insert (nshell.presentation:input-state-mode restored)))
-      (is (string= "" (nshell.presentation:input-state-search-query restored)))
+      (is-search-session-cleared restored)
       (is (eq :suggest-update output)))))
 
 (test input-state-history-search-escape-restores-original-cursor-position
@@ -183,8 +195,7 @@
     (with-reduced-input-state (restored output) (reduce-once state :ctrl-g)
       (is (string= "git status" (nshell.presentation:input-state-buffer restored)))
       (is (= 4 (nshell.presentation:input-state-cursor-pos restored)))
-      (is (eq :insert (nshell.presentation:input-state-mode restored)))
-      (is (string= "" (nshell.presentation:input-state-search-query restored)))
+      (is-search-session-cleared restored)
       (is (eq :suggest-update output)))))
 
 (test input-state-history-search-backspace-empty-query-restores-original-buffer
@@ -201,12 +212,7 @@
     (with-reduced-input-state (restored output) (reduce-once state :backspace)
       (is (string= "git" (nshell.presentation:input-state-buffer restored)))
       (is (= 3 (nshell.presentation:input-state-cursor-pos restored)))
-      (is (eq :insert (nshell.presentation:input-state-mode restored)))
-      (is (string= "" (nshell.presentation:input-state-search-query restored)))
-      (is (string= ""
-                   (nshell.presentation:input-state-search-original-buffer
-                    restored)))
-      (is (= 0 (nshell.presentation:input-state-search-index restored)))
+      (is-search-session-cleared restored)
       (is-completion-session-cleared restored)
       (is (eq :suggest-update output)))))
 
@@ -219,8 +225,7 @@
     (with-reduced-input-state (finished output) (reduce-once state :enter)
       (is (string= "git status"
                    (nshell.presentation:input-state-buffer finished)))
-      (is (eq :insert (nshell.presentation:input-state-mode finished)))
-      (is (string= "" (nshell.presentation:input-state-search-query finished)))
+      (is-search-session-cleared finished)
       (is (eq :execute output)))))
 
 (test input-state-history-search-right-accepts-selected-buffer-for-editing
@@ -238,12 +243,7 @@
       (is (string= "git status"
                    (nshell.presentation:input-state-buffer accepted)))
       (is (= 10 (nshell.presentation:input-state-cursor-pos accepted)))
-      (is (eq :insert (nshell.presentation:input-state-mode accepted)))
-      (is (string= "" (nshell.presentation:input-state-search-query accepted)))
-      (is (string= ""
-                   (nshell.presentation:input-state-search-original-buffer
-                    accepted)))
-      (is (= 0 (nshell.presentation:input-state-search-index accepted)))
+      (is-search-session-cleared accepted)
       (is-completion-session-cleared accepted)
       (is (eq :suggest-update output))
       (with-reduced-input-state (edited edit-output) (reduce-once accepted :char #\!)
@@ -260,8 +260,7 @@
     (with-reduced-input-state (accepted output) (reduce-once state :ctrl-f)
       (is (string= "docker ps"
                    (nshell.presentation:input-state-buffer accepted)))
-      (is (eq :insert (nshell.presentation:input-state-mode accepted)))
-      (is (string= "" (nshell.presentation:input-state-search-query accepted)))
+      (is-search-session-cleared accepted)
       (is (eq :suggest-update output)))))
 
 (test input-state-ctrl-c-clears-buffer
@@ -297,13 +296,7 @@
     (with-reduced-input-state (new-state output) (reduce-once state :ctrl-c)
       (is (string= "" (nshell.presentation:input-state-buffer new-state)))
       (is (= 0 (nshell.presentation:input-state-cursor-pos new-state)))
-      (is (eq :insert (nshell.presentation:input-state-mode new-state)))
-      (is (string= "" (nshell.presentation:input-state-search-query new-state)))
-      (is (string= ""
-                   (nshell.presentation:input-state-search-original-buffer
-                    new-state)))
-      (is (null (nshell.presentation::input-state-search-original-cursor new-state)))
-      (is (= 0 (nshell.presentation:input-state-search-index new-state)))
+      (is-search-session-cleared new-state)
       (is (= -1 (nshell.presentation:input-state-completion-index new-state)))
       (is (null (nshell.presentation:input-state-completion-base-buffer new-state)))
       (is (null (nshell.presentation:input-state-completion-base-cursor new-state)))
@@ -332,14 +325,13 @@
                 :index 2
                 :suggestion " --short")))
     (with-reduced-input-state (new-state output) (reduce-once state :ctrl-l)
-      (is (eq :search (nshell.presentation:input-state-mode new-state)))
+      (is-search-state new-state
+                       :mode :search
+                       :query "status"
+                       :original-buffer "git"
+                       :index 2)
       (is (string= "git status" (nshell.presentation:input-state-buffer new-state)))
       (is (= 10 (nshell.presentation:input-state-cursor-pos new-state)))
-      (is (string= "status"
-                   (nshell.presentation:input-state-search-query new-state)))
-      (is (string= "git"
-                   (nshell.presentation:input-state-search-original-buffer new-state)))
-      (is (= 2 (nshell.presentation:input-state-search-index new-state)))
       (is (string= " --short"
                    (nshell.presentation:input-state-suggestion new-state)))
       (is (eq :clear-screen output)))))

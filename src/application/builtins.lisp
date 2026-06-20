@@ -1,45 +1,5 @@
 (in-package #:nshell.application)
 
-(defmacro define-builtin-table (variable &body entries)
-  `(defparameter ,variable
-     (list ,@(mapcar (lambda (entry)
-                       (destructuring-bind (name handler) entry
-                         `(cons ,name #',handler)))
-                     entries))))
-
-(defmacro define-command-path-builtin (function-name command-name)
-  `(defun ,function-name (context args)
-     (%builtin-command-path context args ,command-name)))
-
-(defparameter +command-path-builtin-specs+
-  '(("type"
-     :builtin-format "~a is a shell builtin~%"
-     :path-format "~a is ~a~%"
-     :missing-prefix "type"
-     :missing-format "~a: not found"
-     :usage "type name [name ...]")
-    ("which"
-     :builtin-format "~a: shell built-in command~%"
-     :path-format "~a~%"
-     :missing-prefix "which"
-     :missing-format "no ~a in PATH"
-     :usage "which name [name ...]")))
-
-(defun %command-path-spec (command)
-  (cdr (assoc command +command-path-builtin-specs+ :test #'string=)))
-
-(defun %describe-command-path (context command missing-formatter)
-  (multiple-value-bind (kind location) (resolve-command-path context command)
-    (case kind
-      (:builtin (values :builtin command))
-      (:path (values :path location))
-      (otherwise (values nil (funcall missing-formatter command))))))
-
-(defun %format-command-path-missing (spec command)
-  (format nil "~a: ~a~%"
-          (getf spec :missing-prefix)
-          (format nil (getf spec :missing-format) command)))
-
 (defun %builtin-command-path (context args command)
   (let ((spec (%command-path-spec command)))
     (if args
@@ -63,47 +23,66 @@
            exit-code))
         (%builtin-usage command (getf spec :usage)))))
 
-(define-command-path-builtin %builtin-type "type")
-(define-command-path-builtin %builtin-which "which")
+(defun %builtin-type (context args)
+  (let ((spec nshell.domain.completion:+type-builtin-spec+))
+    (multiple-value-bind (options names error error-code)
+        (%parse-type-options args)
+      (cond
+        (error
+         (values error error-code))
+        ((%type-options-help-p options)
+         (%type-usage 0))
+        ((null names)
+         (%type-usage))
+        (t
+         (let ((exit-code 1)
+               (mode (cond
+                       ((%type-options-query-p options) :query)
+                       ((%type-options-path-p options) :path)
+                       ((%type-options-force-path-p options) :force-path)
+                       ((%type-options-type-p options) :type)
+                       (t :default))))
+           (labels ((emit-candidates (name candidates out)
+                      (setf exit-code 0)
+                      (dolist (candidate (if (%type-options-all-p options)
+                                             candidates
+                                             (list (first candidates))))
+                        (case mode
+                          (:type
+                           (format out "~a~%"
+                                   (%type-kind-label (first candidate))))
+                          (:path
+                           (case (first candidate)
+                             (:builtin
+                              (format out (getf spec :path-builtin-format) name))
+                             (:path
+                              (format out (getf spec :path-only-format)
+                                      (second candidate)))))
+                          (:force-path
+                           (when (eq (first candidate) :path)
+                             (format out (getf spec :path-only-format)
+                                     (second candidate))))
+                          (otherwise
+                           (%write-type-candidate out spec name candidate options))))))
+             (if (eq mode :query)
+                 (progn
+                   (dolist (name names)
+                     (when (%type-command-candidates context name options)
+                       (setf exit-code 0)))
+                   (values nil exit-code))
+                 (let ((output
+                         (with-output-to-string (out)
+                           (dolist (name names)
+                             (let ((candidates (%type-command-candidates context name options)))
+                               (cond
+                                 (candidates
+                                  (emit-candidates name candidates out))
+                                 ((eq mode :default)
+                                  (write-string (%format-command-type-missing spec name) out))))))))
+                  (values output exit-code))))))))))
 
-(define-builtin-table +default-builtin-specs+
-  ("echo" %builtin-echo)
-  ("pwd" %builtin-pwd)
-  ("ls" %builtin-ls)
-  ("cd" %builtin-cd)
-  ("exit" %builtin-exit)
-  ("fg" %builtin-fg)
-  ("bg" %builtin-bg)
-  ("jobs" %builtin-jobs)
-  ("set" %builtin-set)
-  ("export" %builtin-export)
-  ("alias" %builtin-alias)
-  ("abbr" %builtin-abbr)
-  ("complete" %builtin-complete)
-  ("type" %builtin-type)
-  ("which" %builtin-which)
-  ("test" %builtin-test)
-  ("[" %builtin-bracket)
-  ("string" %builtin-string)
-  ("source" %builtin-source)
-  ("." %builtin-source)
-  ("read" %builtin-read)
-  ("function" %builtin-function)
-  ("true" %builtin-true)
-  ("false" %builtin-false)
-  ("contains" %builtin-contains)
-  ("not" %builtin-not)
-  ("history" %builtin-history)
-  ("help" %builtin-help)
-  ("exec" %builtin-exec)
-  ("disown" %builtin-disown))
-
-(defun register-default-builtins ()
-  "Register nshell's default builtin command handlers."
-  (dolist (entry +default-builtin-specs+ *builtin-registry*)
-    (register-builtin (car entry) (cdr entry))))
-
-(register-default-builtins)
+(defun %builtin-which (context args)
+  (%builtin-command-path context args "which"))
 
 (defun expand-command-alias-node (command-node alias-table)
   (if (nshell.domain.parsing:command-node-p command-node)
@@ -119,3 +98,12 @@
                   command-node))
             command-node))
       command-node))
+
+(defun %install-builtin-registry ()
+  (clrhash *builtin-registry*)
+  (dolist (entry +builtin-registry-specs+)
+    (setf (gethash (car entry) *builtin-registry*)
+          (symbol-function (cdr entry)))))
+
+(eval-when (:load-toplevel :execute)
+  (%install-builtin-registry))

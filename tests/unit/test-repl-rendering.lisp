@@ -5,19 +5,18 @@
 (test repl-non-completion-output-clears-rendered-completion-list
   "A stale completion menu should be erased before the next non-completion redraw."
   (with-repl-test-state
+    (setf nshell.presentation::*config*
+          (nshell.domain.configuration:default-config)
+          nshell.presentation::*completion-rendered-lines* 2
+          nshell.presentation::*prompt-rendered-lines* 3
+          nshell.presentation::*prompt-rendered-cursor-row* 0)
     (with-repl-input-state (:buffer "g"
                             :cursor-pos 1
-                            :completion-index 0
-                            :last-candidates '("git" "grep"))
-      (with-output-to-string (*standard-output*)
-        (nshell.presentation::process-output-event :complete))
-      (is (> nshell.presentation::*completion-rendered-lines* 0))
-      (let ((output
-              (with-output-to-string (*standard-output*)
-                (nshell.presentation::process-output-event :suggest-update))))
+                            :completion-index 0)
+      (let ((output (capture-process-output-event :suggest-update)))
         (is (= 0 nshell.presentation::*completion-rendered-lines*))
-        (is (search (repl-ansi "[2K") output))
-        (is (search (repl-ansi "[A") output))))))
+        (is (search (esc-sequence "[2K") output))
+        (is (search (esc-sequence "[A") output))))))
 
 (test repl-complete-with-no-candidates-clears-stale-completion-session
   "A failed completion attempt should not keep an old candidate list alive."
@@ -28,8 +27,7 @@
                             :completion-base-buffer "g"
                             :completion-base-cursor 1
                             :last-candidates '("git" "grep"))
-      (with-output-to-string (*standard-output*)
-        (nshell.presentation::process-output-event :complete))
+      (capture-process-output-event :complete)
       (is-input-state nshell.presentation::*input-state*
                       :buffer ""
                       :cursor-pos 0
@@ -42,19 +40,24 @@
 (test repl-completion-rendering-starts-below-current-prompt-row
   "Completion rendering should preserve the edit cursor and draw below all prompt rows."
   (with-repl-test-state
-    (setf nshell.presentation::*prompt-rendered-lines* 3
+    (setf nshell.presentation::*config*
+          (nshell.domain.configuration:default-config)
+          nshell.presentation::*prompt-rendered-lines* 3
           nshell.presentation::*prompt-rendered-cursor-row* 0)
+    (nshell.domain.completion:kb-add-command nshell.presentation::*kb*
+                                             "git"
+                                             :description "record changes")
+    (nshell.domain.completion:kb-add-command nshell.presentation::*kb*
+                                             "grep"
+                                             :description "search text")
     (with-repl-input-state (:buffer "g"
                             :cursor-pos 1
-                            :completion-index 0
-                            :last-candidates '("git" "grep"))
-      (let ((output
-              (with-output-to-string (*standard-output*)
-                (nshell.presentation::process-output-event :complete))))
-        (is (search (repl-ansi "7") output))
-        (is (search (format nil "~a~%" (repl-ansi "[2B")) output))
+                            :completion-index 0)
+      (let ((output (capture-process-output-event :complete)))
+        (is (search (esc-sequence "7") output))
+        (is (search (format nil "~a~%" (esc-sequence "[2B")) output))
         (is (search "git" output))
-        (is (search (repl-ansi "8") output))))))
+        (is (search (esc-sequence "8") output))))))
 
 (test repl-completion-tab-extends-unambiguous-common-prefix
   "Fresh completion should first advance the current token to the shared candidate prefix."
@@ -67,9 +70,7 @@
                                              :description "debug ignores")
     (with-repl-input-state (:buffer "ch"
                             :cursor-pos 2)
-      (let ((output
-              (with-output-to-string (*standard-output*)
-                (nshell.presentation::process-output-event :complete))))
+      (let ((output (capture-process-output-event :complete)))
         (is-input-state nshell.presentation::*input-state*
                         :buffer "check"
                         :cursor-pos 5
@@ -88,12 +89,12 @@
           nshell.presentation::*prompt-rendered-cursor-row* 0
           nshell.presentation::*completion-rendered-lines* 2)
     (let ((output
-            (with-output-to-string (*standard-output*)
+            (capture-standard-output
               (nshell.presentation::clear-rendered-completions))))
-      (is (search (repl-ansi "7") output))
-      (is (search (repl-ansi "[5B") output))
-      (is (search (repl-ansi "[A") output))
-      (is (search (repl-ansi "8") output))
+      (is (search (esc-sequence "7") output))
+      (is (search (esc-sequence "[5B") output))
+      (is (search (esc-sequence "[A") output))
+      (is (search (esc-sequence "8") output))
       (is (= 0 nshell.presentation::*completion-rendered-lines*)))))
 
 (test repl-clear-screen-clears-terminal-and-keeps-input-state
@@ -109,12 +110,11 @@
                             :completion-base-cursor 3
                             :last-candidates '("git" "grep")
                             :suggestion " status")
-      (let ((output
-              (with-output-to-string (*standard-output*)
-                (nshell.presentation::process-output-event :clear-screen))))
-        (is (search (repl-ansi "[2J") output))
-        (is (search (repl-ansi "[1;1H") output))
-        (is (= 0 nshell.presentation::*prompt-rendered-lines*))
+        (let ((output
+              (capture-process-output-event :clear-screen)))
+        (is (search (esc-sequence "[2J") output))
+        (is (search (esc-sequence "[1;1H") output))
+        (is (= 1 nshell.presentation::*prompt-rendered-lines*))
         (is (= 0 nshell.presentation::*prompt-rendered-cursor-row*))
         (is (= 0 nshell.presentation::*completion-rendered-lines*))
         (is-input-state nshell.presentation::*input-state*
@@ -130,8 +130,7 @@
   "The REPL handler resolves Alt-dot against history and records a local undo point."
   (with-repl-history-lines ("git status --short")
     (with-repl-input-state (:buffer "echo " :cursor-pos 5)
-      (with-output-to-string (*standard-output*)
-        (nshell.presentation::process-output-event :insert-last-argument))
+      (capture-process-output-event :insert-last-argument)
       (is-input-state nshell.presentation::*input-state*
                       :buffer "echo --short"
                       :cursor-pos 12
@@ -149,8 +148,7 @@
   "Alt-dot should ignore leading shell assignments before inserting the last argument."
   (with-repl-history-lines ("A=1 B=2 git status --short")
     (with-repl-input-state (:buffer "echo " :cursor-pos 5)
-      (with-output-to-string (*standard-output*)
-        (nshell.presentation::process-output-event :insert-last-argument))
+      (capture-process-output-event :insert-last-argument)
       (is-input-state nshell.presentation::*input-state*
                       :buffer "echo --short"
                       :cursor-pos 12
@@ -162,8 +160,7 @@
   "Alt-dot should insert a logical shell word with escaped spaces unchanged."
   (with-repl-history-lines ("echo my\\ file.txt")
     (with-repl-input-state (:buffer "cp " :cursor-pos 3)
-      (with-output-to-string (*standard-output*)
-        (nshell.presentation::process-output-event :insert-last-argument))
+      (capture-process-output-event :insert-last-argument)
       (is-input-state nshell.presentation::*input-state*
                       :buffer "cp my\\ file.txt"
                       :cursor-pos (+ 3 (length "my\\ file.txt"))
@@ -181,10 +178,8 @@
   "Repeated Alt-dot replaces the previous insertion with older history arguments."
   (with-repl-history-lines ("echo older" "git status --short")
     (with-repl-input-state (:buffer "echo " :cursor-pos 5)
-      (with-output-to-string (*standard-output*)
-        (nshell.presentation::process-output-event :insert-last-argument))
-      (with-output-to-string (*standard-output*)
-        (nshell.presentation::process-output-event :insert-last-argument))
+      (capture-process-output-event :insert-last-argument)
+      (capture-process-output-event :insert-last-argument)
       (is-input-state nshell.presentation::*input-state*
                       :buffer "echo older"
                       :cursor-pos 10
@@ -206,19 +201,26 @@
 (test repl-render-prompt-restores-midline-cursor-with-visible-width
   "Redraw should place the terminal cursor at the logical edit cursor, counting CJK width."
   (with-repl-test-state
-    (with-repl-render-state (:buffer "echo あbc"
-                             :cursor-pos 5
-                             :suggestion " --help")
-      (let ((output (with-output-to-string (*standard-output*)
-                      (nshell.presentation::render-prompt-cont))))
-        (is (search (repl-ansi "[11D") output))))))
+    (with-stable-repl-prompt ()
+      (with-fixed-terminal-size (24 80)
+        (with-repl-render-state (:buffer "echo あbc"
+                                 :cursor-pos 5
+                                 :suggestion " --help")
+          (let ((output (capture-standard-output
+                          (nshell.presentation::render-prompt-cont))))
+            (is (search (esc-sequence "[11D") output))))))))
 
 (test repl-render-prompt-keeps-cursor-at-eol
   "Cursor-left rendering should be silent when the edit cursor is at the visible end."
   (is (= 0 (nshell.presentation::%cursor-tail-visible-width "echo あ" 6 nil nil)))
   (is (string= ""
-               (with-output-to-string (*standard-output*)
-                 (nshell.presentation::%move-cursor-left-by-visible-width 0)))))
+               (capture-standard-output
+                 (nshell.presentation::%move-cursor-to-rendered-position
+                  "echo あ"
+                  6
+                  0
+                  nil
+                  nil)))))
 
 (test repl-render-prompt-restores-cursor-across-continuation-lines
   "Multiline redraw should move up to the logical edit line and restore its absolute column."
@@ -227,15 +229,15 @@
         (nshell.presentation::%rendered-buffer-position text 6 7)
       (is (= 0 row))
       (is (= 14 column)))
-    (let ((output (with-output-to-string (*standard-output*)
+    (let ((output (capture-standard-output
                     (nshell.presentation::%move-cursor-to-rendered-position
                      text
                      6
                      7
                      " --help"
                      nil))))
-      (is (search (repl-ansi "[1A") output))
-      (is (search (repl-ansi "[15G") output)))))
+      (is (search (esc-sequence "[1A") output))
+      (is (search (esc-sequence "[15G") output)))))
 
 (test repl-rendered-position-wraps-at-terminal-width
   "Rendered cursor math should include terminal wrapping, not only logical newlines."
@@ -290,7 +292,7 @@
                                :cursor-pos 7
                                :suggestion "hi")
         (with-fixed-terminal-size (24 10)
-          (with-output-to-string (*standard-output*)
+          (capture-standard-output
             (nshell.presentation::render-prompt-cont))
           (is (= 2 nshell.presentation::*prompt-rendered-lines*))
           (is (= 1 nshell.presentation::*prompt-rendered-cursor-row*)))))))
@@ -300,11 +302,11 @@
   (with-repl-test-state
     (setf nshell.presentation::*prompt-rendered-lines* 3
           nshell.presentation::*prompt-rendered-cursor-row* 1)
-    (let ((output (with-output-to-string (*standard-output*)
+    (let ((output (capture-standard-output
                     (nshell.presentation::clear-rendered-prompt))))
-      (is (search (repl-ansi "[1B") output))
+      (is (search (esc-sequence "[1B") output))
       (is (= 3
-             (loop with needle = (repl-ansi "[2K")
+             (loop with needle = (esc-sequence "[2K")
                    for start = 0 then (+ position (length needle))
                    for position = (search needle output :start2 start)
                    while position
@@ -319,7 +321,7 @@
       (with-repl-render-state (:buffer (format nil "one~%two")
                                :cursor-pos 2)
         (with-fixed-terminal-size (24 80)
-          (with-output-to-string (*standard-output*)
+          (capture-standard-output
             (nshell.presentation::render-prompt-cont))
           (is (= 2 nshell.presentation::*prompt-rendered-lines*))
           (is (= 0 nshell.presentation::*prompt-rendered-cursor-row*)))))))
@@ -336,11 +338,11 @@
                                  :search-original-buffer "abc"
                                  :search-original-cursor 3
                                  :search-index 0)
-          (let ((output (with-output-to-string (*standard-output*)
+          (let ((output (capture-standard-output
                           (nshell.presentation::render-prompt-cont))))
             (is (search "history: git" output))
-            (is (search (repl-ansi "[1A") output))
-            (is (search (repl-ansi "[8G") output))
+            (is (search (esc-sequence "[1A") output))
+            (is (search (esc-sequence "[8G") output))
             (is (= 2 nshell.presentation::*prompt-rendered-lines*))
             (is (= 0 nshell.presentation::*prompt-rendered-cursor-row*))))))))
 
@@ -355,7 +357,7 @@
           :prompt-width 0)))
   (is (string=
        (format nil "~C[2A~C[4G" #\Esc #\Esc)
-       (with-output-to-string (*standard-output*)
+       (capture-standard-output
          (nshell.presentation::%move-cursor-to-rendered-position
           "abc"
           3

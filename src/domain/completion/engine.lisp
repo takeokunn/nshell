@@ -56,7 +56,6 @@
 
 (defun complete (kb partial-input &key path)
   (let* ((context (completion-context-for partial-input))
-         (rule-candidates (rule-complete *built-in-rule-knowledge-base* partial-input))
          (command (completion-context-command context))
          (arg-prefix (completion-context-argument-prefix context))
          (filesystem-mode (completion-filesystem-mode context))
@@ -64,22 +63,59 @@
            (when filesystem-mode
              (filesystem-candidates-for-mode filesystem-mode arg-prefix))))
     (cond
-      ((completion-context-command-position-p context)
-       (rank-candidates
-        command
-        (merge-candidates
-         rule-candidates
-         (knowledge-base-command-candidates kb command)
-         (command-candidates-from-path path command))))
-      (filesystem-mode
+      ((completion-context-redirection-target-p context)
        (rank-candidates
         arg-prefix
-        (if filesystem-candidates
-            filesystem-candidates
-            rule-candidates)))
+        (or filesystem-candidates
+            (list (make-candidate arg-prefix :kind :file :description "file")))))
       (t
-       (rank-candidates
-        arg-prefix
-        (merge-candidates
-         rule-candidates
-         (knowledge-base-argument-candidates kb command arg-prefix)))))))
+       (typecase kb
+      (knowledge-base
+       (cond
+         ((completion-context-command-position-p context)
+          (rank-candidates
+           command
+           (merge-candidates
+            (knowledge-base-command-candidates kb command)
+            (command-candidates-from-path path command)
+            (builtin-command-candidates command))))
+         (filesystem-mode
+          (rank-candidates
+           arg-prefix
+           (if filesystem-candidates
+               filesystem-candidates
+               (knowledge-base-argument-candidates kb command arg-prefix))))
+         (t
+          (rank-candidates
+           arg-prefix
+           (knowledge-base-argument-candidates kb command arg-prefix)))))
+      (rule-knowledge-base
+       (let ((rule-candidates (rule-complete kb partial-input)))
+         (cond
+           ((completion-context-command-position-p context)
+            (rank-candidates command rule-candidates))
+           (filesystem-mode
+            (rank-candidates
+             arg-prefix
+             (if filesystem-candidates
+                 filesystem-candidates
+                 rule-candidates)))
+           (t
+            (rank-candidates arg-prefix rule-candidates)))))
+      (t
+       (let ((rule-candidates nil))
+         (cond
+           ((completion-context-command-position-p context)
+            (rank-candidates
+             command
+             (merge-candidates
+              rule-candidates
+              (command-candidates-from-path path command))))
+           (filesystem-mode
+            (rank-candidates
+             arg-prefix
+             (if filesystem-candidates
+                 filesystem-candidates
+                 rule-candidates)))
+           (t
+            (rank-candidates arg-prefix rule-candidates))))))))))

@@ -60,9 +60,11 @@
   (for-all-property (:trials 50) ((command (gen-shell-command)))
     (let ((history (history-with-lines command command)))
       (nshell.domain.history:history-dedup history)
-      (let ((once (history-entry-texts history)))
+      (let ((once (nshell.domain.history:history-entry-texts
+                   (nshell.domain.history:history-all history))))
         (nshell.domain.history:history-dedup history)
-        (let ((twice (history-entry-texts history)))
+        (let ((twice (nshell.domain.history:history-entry-texts
+                      (nshell.domain.history:history-all history))))
           (is (equal once twice)
               "Repeated dedup should preserve generated history for ~s" command)
           (is (= 1 (nshell.domain.history:history-size history))
@@ -75,9 +77,15 @@
            (history (history-with-lines command sentinel)))
       (is (= 1 (nshell.domain.history:history-delete history command))
           "Generated command ~s should be deleted once" command)
-      (is (not (member command (history-entry-texts history) :test #'string=))
+      (is (not (member command
+                       (nshell.domain.history:history-entry-texts
+                        (nshell.domain.history:history-all history))
+                       :test #'string=))
           "Deleted generated command ~s should not remain" command)
-      (is (member sentinel (history-entry-texts history) :test #'string=)
+      (is (member sentinel
+                  (nshell.domain.history:history-entry-texts
+                   (nshell.domain.history:history-all history))
+                  :test #'string=)
           "Deleting ~s should leave sentinel history entry" command))))
 
 (test pbt-command-line-last-argument-returns-final-generated-word

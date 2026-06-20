@@ -20,6 +20,24 @@
         (is-completion-session-cleared tabbed)
         (is (eq :complete tab-output))))))
 
+(test input-state-copy-clearing-completion-with-buffer-replaces-buffer-and-clears-session
+  (let* ((state (input-state
+                 :buffer "g"
+                 :cursor-pos 1
+                 :completion-index 2
+                 :completion-base-buffer "g"
+                 :completion-base-cursor 1
+                 :last-candidates '("git" "grep")
+                 :suggestion "it"))
+         (new-state (nshell.presentation::copy-input-state-clearing-completion
+                     state
+                     :buffer "git status"
+                     :cursor-pos 4)))
+    (is-input-state new-state
+                    :buffer "git status"
+                    :cursor-pos 4)
+    (is-completion-session-cleared new-state)))
+
 (test input-state-escape-clears-completion-session-without-editing
   (let ((state (input-state
                 :buffer "g"
@@ -84,26 +102,3 @@
                       :completion-base-cursor 1
                       :last-candidates '("git" "grep"))
       (is (eq :clear-screen output)))))
-
-(test input-state-completion-session-key-predicates-return-canonical-booleans
-  (is (eq t (nshell.presentation::key-preserves-yank-pop-p
-             (input-key-event :ctrl-y))))
-  (is (eq t (nshell.presentation::key-preserves-completion-session-p
-             (input-key-event :tab))))
-  (is (eq t (nshell.presentation::key-cancels-completion-session-p
-             (input-key-event :escape))))
-  (is (null (nshell.presentation::key-preserves-yank-pop-p
-             (input-key-event :char #\a))))
-  (is (null (nshell.presentation::key-preserves-completion-session-p
-             (input-key-event :char #\a))))
-  (is (null (nshell.presentation::key-cancels-completion-session-p
-             (input-key-event :char #\a))))
-  (let ((state (input-state
-                :mode :insert
-                :buffer "g"
-                :cursor-pos 1
-                :suggestion "it")))
-    (is (eq t (nshell.presentation::completion-session-preserved-p
-               state state (input-key-event :tab))))
-    (is (null (nshell.presentation::completion-session-preserved-p
-               state state (input-key-event :escape))))))

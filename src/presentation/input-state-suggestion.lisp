@@ -102,42 +102,33 @@ fish-style autosuggestion word acceptance for tails such as \" status --short\".
                 (shell-token-end suggestion pos)))))))
 
 (defun append-suggestion-to-input-state (state suggestion)
-  (let* ((new-buffer (concatenate 'string (input-state-buffer state) suggestion))
+  (let* ((buffer (input-state-buffer state))
+         (new-buffer (concatenate 'string buffer suggestion))
          (new-cursor (length new-buffer)))
     (copy-input-state-clearing-completion state
                                           :buffer new-buffer
                                           :cursor-pos new-cursor)))
 
 (defun accept-suggestion-at-eol (state)
-  (let* ((state (normalize-input-state state))
-         (suggestion (input-state-suggestion state)))
-    (if (and suggestion (input-state-at-eol-p state))
-        (values (append-suggestion-to-input-state state suggestion)
-                :suggest-update)
-        (move-cursor-clearing-suggestion state 1))))
-
-(defun accept-suggestion-or-move-end (state)
-  (let ((state (normalize-input-state state)))
-    (if (input-state-at-eol-p state)
-        (accept-suggestion-at-eol state)
-        (move-cursor-to state (length (input-state-buffer state))))))
+  (with-normalized-input-state (state state)
+    (let ((suggestion (input-state-suggestion state)))
+      (if (and suggestion (input-state-at-eol-p state))
+          (values (append-suggestion-to-input-state state suggestion)
+                  :suggest-update)
+          (move-cursor-clearing-suggestion state 1)))))
 
 (defun accept-suggestion-word-at-eol (state)
-  (let* ((state (normalize-input-state state))
-         (suggestion (input-state-suggestion state)))
-    (if (and suggestion (input-state-at-eol-p state))
-        (let* ((accept-end (suggestion-next-word-end suggestion))
-               (accepted (subseq suggestion 0 accept-end))
-               (remaining (subseq suggestion accept-end))
-               (new-state (append-suggestion-to-input-state state accepted)))
-          (values (copy-input-state-clearing-completion new-state
-                   :suggestion (if (zerop (length remaining))
-                                   :clear
-                                   remaining))
-                  :suggest-update))
-        (move-word-right state))))
-
-(defun cancel-visible-suggestion (state)
-  "Dismiss the current autosuggestion without editing the buffer."
-  (values (copy-input-state-with state :suggestion :clear)
-          :redraw))
+  (with-normalized-input-state (state state)
+    (let ((suggestion (input-state-suggestion state)))
+      (if (and suggestion (input-state-at-eol-p state))
+          (let* ((accept-end (suggestion-next-word-end suggestion))
+                 (accepted (subseq suggestion 0 accept-end))
+                 (remaining (subseq suggestion accept-end))
+                 (new-state (append-suggestion-to-input-state state accepted)))
+            (values (if (zerop (length remaining))
+                        (copy-input-state-with new-state
+                                               :suggestion :clear)
+                        (copy-input-state-with new-state
+                                               :suggestion remaining))
+                    :suggest-update))
+          (move-word-right state)))))

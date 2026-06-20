@@ -33,15 +33,17 @@
   (let ((dispatcher (nshell.application:make-event-dispatcher))
         (events nil)
         (ast (nshell.domain.parsing:make-command-node "true" nil)))
-    (dolist (type '(:pipeline-started :process-created :process-exited :pipeline-completed))
-      (nshell.application:subscribe dispatcher type
-                                    (lambda (event)
-                                      (push (nshell.domain.events:event-type event) events))))
-    (is (= 0 (nshell.application:execute-pipeline-use-case ast dispatcher)))
-    (is (null (nshell.application:drain-events dispatcher)))
-    (let ((delivered (nreverse events)))
-      (is (member :pipeline-started delivered))
-      (is (member :pipeline-completed delivered)))))
+    (with-event-capture (events dispatcher
+                                 :pipeline-started
+                                 :process-created
+                                 :process-exited
+                                 :pipeline-completed)
+        (nshell.domain.events:domain-event-type event)
+      (is (= 0 (nshell.application:execute-pipeline-use-case ast dispatcher)))
+      (is (null (nshell.application:drain-events dispatcher)))
+      (let ((delivered (nreverse events)))
+        (is (member :pipeline-started delivered))
+        (is (member :pipeline-completed delivered))))))
 
 (test execute-pipeline-use-case-applies-stage-redirections
   "Pipeline execution through the application API preserves per-stage redirects."
@@ -65,10 +67,19 @@
              (let ((actual (make-string (file-length stream))))
                (read-sequence actual stream)
                (is (string= content actual)))))
-      (handler-case
+        (handler-case
           (when (probe-file root)
             (uiop:delete-directory-tree root :validate t))
         (error ())))))
+
+(test execute-command-redirect-extraction-preserves-dangling-operator
+  "A trailing redirect operator should remain part of the command arguments."
+  (multiple-value-bind (clean redirects)
+      (nshell.application::%extract-command-redirects
+       (nshell.domain.parsing:make-command-node "echo" (list "hello" ">")))
+    (is (equal '("hello" ">")
+               (nshell.domain.parsing:command-node-args clean)))
+    (is (null redirects))))
 
 (test execute-pipeline-use-case-returns-127-for-missing-command
   "A pipeline with an unresolvable command reports a non-zero spawn failure."

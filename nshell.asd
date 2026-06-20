@@ -1,4 +1,4 @@
-(defsystem "nshell"
+(asdf:defsystem "nshell"
   :version "0.1.0"
   :author "nshell contributors"
   :license "MIT"
@@ -25,7 +25,7 @@
     (:file "domain/environment/env")
     (:file "domain/expansion/expand")
     (:file "domain/abbreviation/expansion")
-    (:file "domain/completion/candidate")
+   (:file "domain/completion/candidate")
    (:file "domain/completion/knowledge-base")
    (:file "domain/completion/rule-data")
    (:file "domain/completion/context")
@@ -46,7 +46,9 @@
    (:file "application/shell-context")
    (:file "application/execute-pipeline")
    (:file "application/manage-job")
+   (:file "application/builtin-spec-data")
    (:file "application/builtin-runtime")
+   (:file "application/builtin-string")
    (:file "application/builtin-source-reader")
    (:file "application/builtin-source")
    (:file "application/builtin-commands")
@@ -80,7 +82,6 @@
    (:file "infrastructure/terminal/input-read")
    (:file "infrastructure/terminal/input")
    (:file "presentation/input-state-core")
-   (:file "presentation/input-state-key-event")
    (:file "presentation/input-state-helpers")
    (:file "presentation/input-state-buffer")
    (:file "presentation/input-state-buffer-transforms")
@@ -109,8 +110,7 @@
    (:file "presentation/repl-execution-context")
    (:file "presentation/repl-execution-prep")
    (:file "presentation/repl-execution-command")
-   (:file "presentation/repl-execution-control")
-   (:file "presentation/repl-execution-background")
+	   (:file "presentation/repl-execution-background")
    (:file "presentation/repl-execution")
    (:file "presentation/repl-rendering-cursor")
    (:file "presentation/repl-rendering")
@@ -123,7 +123,7 @@
 	   (:file "presentation/repl")
 	   (:file "main")))
 
-(defsystem "nshell/test"
+(asdf:defsystem "nshell/test"
   :version "0.1.0"
   :author "nshell contributors"
   :license "MIT"
@@ -220,7 +220,7 @@
    (:file "e2e/test-signals")
    (:file "e2e/test-job-control")
    (:file "perf/test-startup"))
-  :perform (test-op (o s)
+   :perform (asdf:test-op (o s)
               (declare (ignore o s))
               (let ((result (uiop:symbol-call :fiveam '#:run!
                                               (uiop:find-symbol* '#:nshell-tests :nshell/test))))

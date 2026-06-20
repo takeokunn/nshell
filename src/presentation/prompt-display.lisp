@@ -25,6 +25,24 @@
   (loop for (text . nil) in segments
         sum (%string-visible-width text)))
 
+(defun %home-prefix-p (home cwd)
+  "Return T when CWD is HOME or a descendant of HOME on a path boundary."
+  (let ((home-length (length home))
+        (cwd-length (length cwd)))
+    (and (<= home-length cwd-length)
+         (string= home cwd :end2 home-length)
+         (or (= home-length cwd-length)
+             (let ((separator (char cwd home-length)))
+               (or (char= separator #\/)
+                   (char= separator #\\)))))))
+
+(defun %display-cwd (cwd)
+  "Return CWD with a home-directory prefix shortened to ~ when appropriate."
+  (let ((home (uiop:getenv "HOME")))
+    (if (and home (%home-prefix-p home cwd))
+        (concatenate 'string "~" (subseq cwd (length home)))
+        cwd)))
+
 (defun %truncate-string-to-width (text width)
   (with-output-to-string (out)
     (loop with used = 0
@@ -79,21 +97,21 @@
     (:exit-error :prompt-error)
     (:literal :normal)
     (:git :prompt-path)
+    (:duration :comment)
     (:time :comment)
     (t :normal)))
 
-(defun render-prompt (config last-exit &key (terminal-width (%prompt-terminal-width)))
+(defun render-prompt (config last-exit &key (last-command-duration-ms nil)
+                                      (terminal-width (%prompt-terminal-width)))
   "Render the left prompt with theme colors."
   (let* ((theme (nshell.domain.configuration:config-theme config))
          (cwd (namestring (uiop:getcwd)))
-         (home (uiop:getenv "HOME"))
-         (display-cwd (if (and home (uiop:string-prefix-p home cwd))
-                         (concatenate 'string "~" (subseq cwd (length home)))
-                         cwd))
+         (display-cwd (%display-cwd cwd))
          (pm (nshell.domain.prompting:make-prompt-model
               :hostname (or (uiop:hostname) "localhost")
               :cwd display-cwd
-              :exit-code last-exit))
+              :exit-code last-exit
+              :duration-ms last-command-duration-ms))
          (segments (nshell.domain.prompting:render-prompt-model pm)))
     (dolist (seg segments)
       (let ((text (car seg))
@@ -120,7 +138,3 @@
                 (nshell.infrastructure.terminal:ansi-restore-cursor)))))))
     (finish-output)
     (%segments-visible-width segments)))
-
-(defun render-input-line (line offset)
-  (declare (ignore offset))
-  (format t "~a" line))

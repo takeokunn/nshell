@@ -6,6 +6,7 @@
             history-entry-text
             history-entry-timestamp
             history-entry-exit-code
+            history-entry-texts
             entry-equal-p)))
 
 ;;; HistoryEntry - immutable value object
@@ -22,6 +23,10 @@ EXIT-CODE is the exit code (nil if not yet executed)."
 (defun entry-text (entry)
   "Return the command text for ENTRY."
   (history-entry-text entry))
+
+(defun history-entry-texts (entries)
+  "Return the command texts for ENTRIES."
+  (mapcar #'entry-text entries))
 
 (defun entry-timestamp (entry)
   "Return the universal-time timestamp for ENTRY."

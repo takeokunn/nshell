@@ -1,21 +1,29 @@
 (in-package #:nshell/test)
 
-(defun make-test-builtins-context (&key external-runner external-capture-runner)
-  (let ((files (make-hash-table :test #'equal))
-        (dirs (make-hash-table :test #'equal)))
-    (setf (gethash "/bin/echo" files) t
-          (gethash "/tmp/file.txt" files) t
-          (gethash "/tmp" dirs) t)
+(defun make-test-builtins-context (&key
+                                     external-runner
+                                     external-capture-runner
+                                     (path "/bin:/usr/bin")
+                                     (files '("/bin/echo" "/tmp/file.txt"))
+                                     (dirs '("/tmp"))
+                                     function-table)
+  (let ((file-table (make-hash-table :test #'equal))
+        (dir-table (make-hash-table :test #'equal)))
+    (dolist (file-path files)
+      (setf (gethash file-path file-table) t))
+    (dolist (dir-path dirs)
+      (setf (gethash dir-path dir-table) t))
     (make-test-shell-context
      :environment (nshell.domain.environment:env-set
                    (nshell.domain.environment:make-default-environment)
-                   "PATH" "/bin:/usr/bin" t)
+                   "PATH" path t)
+     :function-table (or function-table (make-hash-table :test #'equal))
      :filesystem-fns
      (list :list-dir (lambda (dir) (declare (ignore dir)) nil)
            :stat (lambda (path)
-                   (or (gethash path files) (gethash path dirs)))
-           :file-exists-p (lambda (path) (gethash path files))
-           :directory-exists-p (lambda (path) (gethash path dirs))
+                   (or (gethash path file-table) (gethash path dir-table)))
+           :file-exists-p (lambda (path) (gethash path file-table))
+           :directory-exists-p (lambda (path) (gethash path dir-table))
            :cwd (lambda () #p"/tmp/")
            :chdir (lambda (path) (declare (ignore path)) t))
      :process-fns
@@ -33,11 +41,26 @@
            :restore #'nshell.infrastructure.acl:restore-redirects)
      :terminal-fns nil)))
 
+(defmacro with-builtins-context ((context) &body body)
+  `(let ((,context (make-test-builtins-context)))
+     ,@body))
+
 (defun call-builtin (context name args)
   (funcall (nshell.application:lookup-builtin name) context args))
 
+(defun call-string-builtin (context args)
+  (call-builtin context "string" args))
+
 (defun call-source-file (context path)
   (call-builtin context "source" (list (namestring path))))
+
+(defmacro with-called-source ((output code context lines) &body body)
+  (let ((source (gensym "SOURCE")))
+    `(with-test-source-file (,source nil)
+       (write-test-lines ,source ,lines)
+       (multiple-value-bind (,output ,code)
+           (call-source-file ,context ,source)
+         ,@body))))
 
 (defun %builtin-output-contains-all-p (output needles)
   (every (lambda (needle)
@@ -91,6 +114,9 @@
          ,bindings
        ,@body)))
 
+(defmacro assert-string-builtin-property ((context &key (trials '*pbt-default-trials*)) bindings &body body)
+  `(assert-builtin-property (,context :trials ,trials) ,bindings ,@body))
+
 (defmacro with-builtins-source ((output code context lines) &body body)
   `(let ((,context (make-test-builtins-context)))
      (with-called-source (,output ,code ,context ,lines)
@@ -103,13 +129,21 @@
 
 (defmacro assert-builtin-cases ((context name) &body cases)
   "Assert a table of builtin calls for the same CONTEXT and NAME."
+  (labels ((case-args-form (args)
+             (if (and (consp args)
+                      (symbolp (car args)))
+                 args
+                 `',args)))
   `(progn
      ,@(mapcar (lambda (case)
                  (destructuring-bind (args &rest options) case
                    (list* 'assert-builtin-call
-                          (list context name args)
+                          (list context name (case-args-form args))
                           options)))
-               cases)))
+               cases))))
+
+(defmacro assert-string-builtin-cases ((context) &body cases)
+  `(assert-builtin-cases (,context "string") ,@cases))
 
 (defmacro assert-fish-style-table-builtin-roundtrip
     ((context name table-form key expansion add-args list-fragment erase-error-output erase-args missing-key

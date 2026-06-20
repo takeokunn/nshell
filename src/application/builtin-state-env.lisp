@@ -48,12 +48,12 @@
       ((%set-export-option-p (first args))
        (unless (second args)
          (return-from %builtin-set (values (%set-usage) 1)))
-       (setf (shell-context-environment context)
-             (nshell.domain.environment:env-set
-              (shell-context-environment context)
-              (second args)
-              (%join-command-args (cddr args))
-              t))
+        (setf (shell-context-environment context)
+              (nshell.domain.environment:env-set
+               (shell-context-environment context)
+               (second args)
+               (%string-join (cddr args) " ")
+               t))
        (values nil 0))
       ((%set-erase-option-p (first args))
        (with-set-name-argument "-e"
@@ -65,12 +65,12 @@
             (char= #\- (char (first args) 0)))
        (values (%set-usage) 1))
       (t
-       (setf (shell-context-environment context)
-             (nshell.domain.environment:env-set
-              (shell-context-environment context)
-              (first args)
-              (%join-command-args (rest args))
-              nil))
+        (setf (shell-context-environment context)
+              (nshell.domain.environment:env-set
+               (shell-context-environment context)
+               (first args)
+               (%string-join (rest args) " ")
+               nil))
        (values nil 0)))))
 
 (defun %builtin-export (context args)

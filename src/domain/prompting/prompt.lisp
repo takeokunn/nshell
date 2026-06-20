@@ -1,5 +1,5 @@
 ;;; Prompt model - pure data structure for prompt rendering
-;;; fish-inspired: left prompt + right prompt with git/exit/time info
+;;; fish-inspired: left prompt + right prompt with git/exit/duration/time info
 (in-package #:nshell.domain.prompting)
 
 (defparameter *git-status-resolver*
@@ -15,12 +15,13 @@
       (format nil "~2,'0d:~2,'0d" hour min)))
   "Function returning the right-prompt time text, or NIL to omit it.")
 
-(defstruct (prompt-model (:constructor make-prompt-model (&key hostname cwd directory exit-code segments right-segments)))
+(defstruct (prompt-model (:constructor make-prompt-model (&key hostname cwd directory exit-code duration-ms segments right-segments)))
   "Pure data model for rendering a shell prompt."
   (hostname "localhost" :type string :read-only t)
   (cwd "/" :type string :read-only t)
   (directory nil :type (or null string) :read-only t)
   (exit-code 0 :type (or null integer) :read-only t)
+  (duration-ms nil :type (or null integer) :read-only t)
   (segments nil :type list :read-only t)
   (right-segments nil :type list :read-only t))
 
@@ -53,6 +54,15 @@
   (let ((text (funcall *prompt-time-resolver*)))
     (when text
       (make-prompt-segment text :time))))
+
+(defun %prompt-duration-segment (pm)
+  (let ((duration-ms (prompt-model-duration-ms pm)))
+    (when (and duration-ms (plusp duration-ms))
+      (make-prompt-segment
+       (if (< duration-ms 1000)
+           (format nil "~dms" duration-ms)
+           (format nil "~,2fs" (/ duration-ms 1000.0)))
+       :duration))))
 
 (defun %render-right-segment (pm seg)
   (case (prompt-segment-kind seg)
@@ -92,7 +102,8 @@
                             segs))
         (let ((result nil)
               (git (%git-status-segment pm))
-              (ec (prompt-model-exit-code pm)))
+              (ec (prompt-model-exit-code pm))
+              (duration (%prompt-duration-segment pm)))
           (when git
             (push (cons (prompt-segment-text git)
                         (prompt-segment-kind git))
@@ -101,6 +112,12 @@
             (when result
               (push (cons " " :literal) result))
             (push (cons (format nil "[~d]" ec) :exit-error) result))
+          (when duration
+            (when result
+              (push (cons " " :literal) result))
+            (push (cons (prompt-segment-text duration)
+                        (prompt-segment-kind duration))
+                  result))
           (let ((time (%prompt-time-segment)))
             (when time
               (when result

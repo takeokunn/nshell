@@ -1,13 +1,5 @@
 (in-package #:nshell.presentation)
 
-;; CPS Rendering
-(defun render-highlighted-input-line (text theme)
-  (handler-case
-      (let ((spans (highlight-line text)))
-        (format t "~a" (highlight->ansi spans text theme)))
-    (error ()
-      (format t "~a" text))))
-
 (defun render-edit-buffer (text theme)
   (loop with start = 0
         with first-line = t
@@ -16,9 +8,11 @@
         do (let ((newline-pos (position #\Newline text :start start)))
              (unless first-line
                (format t "~%> "))
-             (render-highlighted-input-line
-              (subseq text start (or newline-pos (length text)))
-              theme)
+             (handler-case
+                 (let ((line (subseq text start (or newline-pos (length text)))))
+                   (format t "~a" (highlight->ansi (highlight-line line) line theme)))
+               (error ()
+                 (format t "~a" (subseq text start (or newline-pos (length text))))))
              (setf first-line nil)
              (if newline-pos
                  (setf start (1+ newline-pos))
@@ -48,7 +42,7 @@
 
 (defun render-prompt-cont ()
   (unless *running*
-    (return-from render-prompt-cont (done)))
+    (return-from render-prompt-cont nil))
   (reap-background-jobs)
   (clear-rendered-prompt)
   (let* ((terminal-width
@@ -59,6 +53,7 @@
              cols))
          (prompt-width
            (render-prompt *config* *last-exit-code*
+                          :last-command-duration-ms *last-command-duration-ms*
                           :terminal-width terminal-width))
          (text (input-state-buffer *input-state*))
          (theme (nshell.domain.configuration:config-theme *config*))

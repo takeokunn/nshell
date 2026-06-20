@@ -10,6 +10,24 @@
   (with-complete-ast (ast "echo hello")
     (is (nshell.domain.parsing:command-node-p ast))))
 
+(test source-loads-real-file-and-registers-function
+  (with-builtins-context (context)
+    (with-test-source-file (source nil :prefix "nshell-source-integration")
+      (write-test-lines source
+                        '("function greet"
+                          "echo from-file"
+                          "end"
+                          "greet"
+                          "echo after-file"))
+      (multiple-value-bind (output code)
+          (call-source-file context source)
+        (is (= 0 code))
+        (is (string= (format nil "from-file~%after-file~%") output))
+        (is (equal '("echo from-file")
+                   (gethash "greet"
+                            (nshell.application:shell-context-function-table
+                             context))))))))
+
 (test pipeline-parsing
   (with-complete-ast (ast "ls | grep foo")
     (is (nshell.domain.parsing:pipeline-node-p ast))
@@ -81,7 +99,7 @@
          (push 2 results)
          (lambda ()
            (push 3 results)
-           (nshell.presentation:done)))))
+           nil))))
     (is (equal '(3 2 1) results))))
 
 (test tokenizer-parser-ast-roundtrip

@@ -5,12 +5,6 @@
     (dolist (line lines history)
       (nshell.domain.history:history-add history line))))
 
-(defun history-result-texts (entries)
-  (mapcar #'nshell.domain.history:entry-text entries))
-
-(defun history-entry-texts (history)
-  (history-result-texts (nshell.domain.history:history-all history)))
-
 (defmacro with-history ((name &rest lines) &body body)
   `(let ((,name (history-with-lines ,@lines)))
      ,@body))

@@ -23,7 +23,7 @@ git status"
          (results (nshell.domain.history:history-search history "git" :mode :line-prefix)))
     (is (equal '("git push" "echo setup
 git status")
-               (history-result-texts results)))))
+               (nshell.domain.history:history-entry-texts results)))))
 
 (test history-line-prefix-search-respects-smartcase
   "Line-prefix smartcase keeps uppercase queries case-sensitive."
@@ -34,7 +34,7 @@ git status"
                                                         :mode :line-prefix
                                                         :smartcase t)))
     (is (equal '("Git status")
-               (history-result-texts results)))))
+               (nshell.domain.history:history-entry-texts results)))))
 
 (test history-smartcase
   "Smartcase makes uppercase queries case-sensitive."

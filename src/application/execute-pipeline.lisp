@@ -44,21 +44,19 @@
   (let ((clean nil)
         (redirects nil)
         (args (nshell.domain.parsing:command-node-args cmd-node)))
-    (loop for rest on args
-          for value = (nshell.domain.parsing:arg-value (first rest))
-          do (cond
-               ((and (member value '(">" ">>" "<") :test #'string=)
-                     (rest rest))
-                (let ((target (nshell.domain.parsing:arg-value (second rest))))
-                  (push (cons (cond
-                                ((string= value ">") :>)
-                                ((string= value ">>") :>>)
-                                (t :<))
-                              target)
-                        redirects))
-                (pop rest))
-               (t
-                (push (first rest) clean))))
+    (loop with index = 0
+          with limit = (length args)
+          while (< index limit)
+          for arg = (nth index args)
+          for value = (nshell.domain.parsing:arg-value arg)
+          for spec = (assoc value nshell.domain.parsing:+redirect-specs+ :test #'string=)
+          do (if (and spec (< (1+ index) limit))
+                 (let ((target (nshell.domain.parsing:arg-value (nth (1+ index) args))))
+                   (push (cons (cdr spec) target) redirects)
+                   (incf index 2))
+                 (progn
+                   (push arg clean)
+                   (incf index))))
     (values (nshell.domain.parsing:make-command-node
              (nshell.domain.parsing:command-node-command cmd-node)
              (nreverse clean))

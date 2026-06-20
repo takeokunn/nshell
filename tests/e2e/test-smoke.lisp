@@ -1,6 +1,47 @@
 (in-package #:nshell/test)
 (def-suite e2e-tests :description "E2E smoke tests" :in nshell-tests)
 (in-suite e2e-tests)
+
+(defun %nshell-main-form (arguments)
+  (format nil
+          "(progn
+             (asdf:load-system :nshell)
+             (let ((sb-ext:*posix-argv* (list ~{~S~^ ~})))
+               (funcall (symbol-function (find-symbol \"MAIN\" \"NSHELL\")))))"
+          (cons "nshell" arguments)))
+
+(defun %run-nshell-main (arguments)
+  (let ((root (asdf:system-source-directory :nshell)))
+    (multiple-value-bind (stdout stderr exit-code)
+        (uiop:run-program
+         (list (current-sbcl-executable)
+               "--noinform"
+               "--eval" "(require :asdf)"
+               "--eval" "(push (truename \"./\") asdf:*central-registry*)"
+               "--eval" (%nshell-main-form arguments))
+         :directory root
+         :output :string
+         :error-output :string
+         :ignore-error-status t)
+      (values stdout stderr exit-code))))
+
+(defun %assert-nshell-main-result (arguments expected-output expected-code
+                                 &key expected-error)
+  (multiple-value-bind (stdout stderr exit-code)
+      (%run-nshell-main arguments)
+    (is (= expected-code exit-code))
+    (when expected-output
+      (is (search expected-output stdout)
+          "stdout should contain ~S, got ~S"
+          expected-output stdout))
+    (when expected-error
+      (is (search expected-error stderr)
+          "stderr should contain ~S, got ~S"
+          expected-error stderr))
+    (unless expected-error
+      (is (string= "" stderr)))
+    (values stdout stderr exit-code)))
+
 (test e2e-echo-command
   (with-complete-command-line (result ast "echo hello world")
     (is (nshell.domain.parsing:command-node-p ast))
@@ -14,6 +55,37 @@
     (nshell.domain.history:history-add history line)
     (is (= 1 (nshell.domain.history:history-size history)))))
 
+(test e2e-main-help-exits-cleanly
+  "The entry point prints usage text and exits successfully for --help."
+  (%assert-nshell-main-result '("--help")
+                              "Usage: nshell [--help] [--version] [-c COMMAND]"
+                              0))
+
+(test e2e-main-version-exits-cleanly
+  "The entry point prints a version banner and exits successfully for --version."
+  (%assert-nshell-main-result '("--version")
+                              "nshell v0.1.0"
+                              0))
+
+(test e2e-main-invalid-args-report-usage
+  "The entry point rejects unsupported arguments with a usage message."
+  (%assert-nshell-main-result '("script")
+                              nil
+                              1
+                              :expected-error "Usage: nshell [--help] [--version] [-c COMMAND]"))
+
+(test e2e-main-command-executes-once
+  "The entry point executes a single batch command with -c."
+  (%assert-nshell-main-result '("-c" "echo hello")
+                              "hello"
+                              0))
+
+(test e2e-main-type-command-executes-cleanly
+  "The entry point executes type through the batch command path."
+  (%assert-nshell-main-result '("-c" "type echo")
+                              "echo is a shell builtin"
+                              0))
+
 (test e2e-abbreviation-expands-on-enter-before-execution
   (with-repl-test-state
     (setf (gethash "say" nshell.presentation::*abbreviations*) "echo hello")
@@ -24,8 +96,7 @@
       (setf nshell.presentation::*input-state* state)
       (is-input-state state :buffer "echo hello" :cursor-pos 10)
       (is (eq :execute output))
-      (let ((rendered (with-output-to-string (*standard-output*)
-                        (nshell.presentation::process-output-event output))))
+      (let ((rendered (capture-process-output-event output)))
         (is (search "hello" rendered))
         (is (= 0 nshell.presentation::*last-exit-code*))
         (is (string= ""
@@ -402,8 +473,7 @@
                         :last-candidates '("git" "grep")
                         :suggestion " status")
         (setf nshell.presentation::*input-state* next-state)
-        (let ((rendered (with-output-to-string (*standard-output*)
-                          (nshell.presentation::process-output-event output))))
+        (let ((rendered (capture-process-output-event output)))
           (is (search "[2J" rendered))
           (is (search "[1;1H" rendered))))
       (is-input-state nshell.presentation::*input-state*
@@ -486,8 +556,11 @@
                                  (namestring input)
                                  (namestring output))))
                (with-complete-command-line (result ast line)
-                 (is (= 0 (nshell.presentation::execute-ast ast)))
-                 (is (probe-file output))
+                (multiple-value-bind (output-text code)
+                    (call-repl-execute-ast ast)
+                  (declare (ignore output-text))
+                  (is (= 0 code)))
+                (is (probe-file output))
                  (with-open-file (stream output :direction :input)
                    (let ((actual (make-string (file-length stream))))
                      (read-sequence actual stream)

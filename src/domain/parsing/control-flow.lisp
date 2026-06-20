@@ -3,6 +3,17 @@
 (defparameter +control-flow-keywords+
   '("if" "else" "for" "in" "while" "case" "switch" "begin" "end"))
 
+(defparameter +control-flow-block-keywords+
+  '("if" "for" "while" "case" "switch" "begin"))
+
+(defparameter +control-flow-grouper-specs+
+  '(("if" . %group-control-flow-if)
+    ("for" . %group-control-flow-for)
+    ("while" . %group-control-flow-while)
+    ("case" . %group-control-flow-case)
+    ("switch" . %group-control-flow-switch)
+    ("begin" . %group-control-flow-begin)))
+
 (defun control-flow-keyword-p (value)
   (and (stringp value)
        (not (null (member value +control-flow-keywords+ :test #'string=)))))
@@ -13,8 +24,7 @@
       (and (control-flow-keyword-p command) command))))
 
 (defun %block-opening-keyword-p (keyword)
-  (not (null (member keyword '("if" "for" "while" "case" "switch" "begin")
-                     :test #'string=))))
+  (not (null (member keyword +control-flow-block-keywords+ :test #'string=))))
 
 (defun %command-first-arg-value (header &optional (default ""))
   (let ((args (and (command-node-p header) (command-node-args header))))
@@ -237,6 +247,9 @@
       (%group-control-flow-body nodes '("case" "end"))
     (values (list (cons "*" body)) rest)))
 
+(defun %control-flow-grouper (keyword)
+  (cdr (assoc keyword +control-flow-grouper-specs+ :test #'string=)))
+
 (defun %group-control-flow-switch (nodes)
   (let* ((header (first nodes))
          (value (%command-first-arg-value header)))
@@ -253,14 +266,10 @@
 (defun %group-control-flow-next (nodes)
   (let* ((node (first nodes))
          (keyword (%command-keyword node)))
-    (cond
-      ((and keyword (string= keyword "if")) (%group-control-flow-if nodes))
-      ((and keyword (string= keyword "for")) (%group-control-flow-for nodes))
-      ((and keyword (string= keyword "while")) (%group-control-flow-while nodes))
-      ((and keyword (string= keyword "case")) (%group-control-flow-case nodes))
-      ((and keyword (string= keyword "switch")) (%group-control-flow-switch nodes))
-      ((and keyword (string= keyword "begin")) (%group-control-flow-begin nodes))
-      (t (values (group-control-flow node) (rest nodes))))))
+    (let ((grouper (%control-flow-grouper keyword)))
+      (if grouper
+          (funcall grouper nodes)
+          (values (group-control-flow node) (rest nodes))))))
 
 (defun group-control-flow (ast)
   (cond

@@ -218,6 +218,15 @@ counterexample. No external shrinking library is used."
      (for-all ,bindings
        ,@body)))
 
+(defmacro with-event-capture ((events dispatcher &rest types) projection &body body)
+  "Subscribe to TYPES on DISPATCHER and collect PROJECTION values into EVENTS."
+  `(let ((,events nil))
+     (dolist (type ',types)
+       (nshell.application:subscribe ,dispatcher type
+                                     (lambda (event)
+                                       (push ,projection ,events))))
+     ,@body))
+
 ;;; Shared test fixtures and adapters used across integration, e2e, and unit tests.
 
 (defun %default-test-filesystem-fns ()
@@ -274,6 +283,7 @@ counterexample. No external shrinking library is used."
                                   (alias-table (make-hash-table :test #'equal))
                                   (abbreviation-table (make-hash-table :test #'equal))
                                   (function-table (make-hash-table :test #'equal))
+                                  (function-source-table (make-hash-table :test #'equal))
                                   (filesystem-fns nil filesystem-fns-supplied-p)
                                   (process-fns nil process-fns-supplied-p)
                                   redirect-fns
@@ -298,6 +308,7 @@ counterexample. No external shrinking library is used."
      :alias-table alias-table
      :abbreviation-table abbreviation-table
      :function-table function-table
+     :function-source-table function-source-table
      :filesystem-fns filesystem-fns
      :process-fns process-fns
      :redirect-fns redirect-fns
@@ -427,11 +438,3 @@ counterexample. No external shrinking library is used."
           (progn ,@body)
        (when (uiop:directory-exists-p ,root)
          (uiop:delete-directory-tree ,root :validate t)))))
-
-(defmacro with-called-source ((output code context lines) &body body)
-  (let ((source (gensym "SOURCE")))
-    `(with-test-source-file (,source nil)
-       (write-test-lines ,source ,lines)
-       (multiple-value-bind (,output ,code)
-           (call-source-file ,context ,source)
-         ,@body))))

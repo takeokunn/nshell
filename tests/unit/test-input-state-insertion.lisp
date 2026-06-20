@@ -185,6 +185,14 @@
         (is-input-state undone :buffer "echo " :cursor-pos 5)
         (is (eq :suggest-update undo-output))))))
 
+(test normalize-paste-text-normalizes-line-endings
+  (let ((text (format nil "a~C~Cb~Cc~C"
+                      #\Return #\Newline #\Return #\Newline)))
+    (is (string= (format nil "a~%b~%c~%")
+                 (nshell.presentation::normalize-paste-text text)))
+    (is (null (nshell.presentation::normalize-paste-text nil)))
+    (is (null (nshell.presentation::normalize-paste-text :not-a-string)))))
+
 (test pbt-input-state-paste-normalizes-newlines-at-cursor
   (check-property (:trials 50)
       ((prefix (gen-prompt-text :max-length 16) #'shrink-prompt-text)
