@@ -32,7 +32,7 @@
            (not (string= "readme" (file-namestring entry)))))
       (let ((texts (completion-texts
                     (nshell.domain.completion:complete kb "c" :path "/mock:/other"))))
-        (is (equal '("cd" "complete" "contains" "cargo" "cat") texts))))))
+        (is (equal '("cd" "complete" "contains" "count" "cargo" "cat") texts))))))
 
 (test command-completion-ranks-exact-match-first
   (let ((kb (nshell.domain.completion:make-knowledge-base)))

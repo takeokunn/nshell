@@ -11,6 +11,7 @@
     ("cd" . %builtin-cd)
     ("complete" . %builtin-complete)
     ("contains" . %builtin-contains)
+    ("count" . %builtin-count)
     ("disown" . %builtin-disown)
     ("exec" . %builtin-exec)
     ("export" . %builtin-export)

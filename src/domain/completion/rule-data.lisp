@@ -126,6 +126,10 @@
          :synopsis "contains [-i|--index] string [values...]"
          :description "test whether a value is present"
          :flags '("-i" "--index" "--"))
+   (list :command "count"
+         :synopsis "count [values...]"
+         :description "print the number of arguments"
+         :flags '())
    (list :command "not"
          :synopsis "not command [args...]"
          :description "invert command status")))

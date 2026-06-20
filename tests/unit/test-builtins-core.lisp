@@ -240,6 +240,19 @@ echo is /usr/bin/echo
         :output-null t
         :stdout-contains '("fg: no such job: 42")))))
 
+(test count-reports-number-of-arguments
+  "count prints the argument count, exiting 0 when non-empty and 1 when empty."
+  (with-builtins-context (context)
+    (assert-builtin-call (context "count" '("a" "b" "c"))
+      :code 0
+      :output (format nil "3~%"))
+    (assert-builtin-call (context "count" '("only"))
+      :code 0
+      :output (format nil "1~%"))
+    (assert-builtin-call (context "count" '())
+      :code 1
+      :output (format nil "0~%"))))
+
 (test contains-tests-membership-without-output
   "contains returns success when the needle appears in the value list."
   (with-builtins-context (context)

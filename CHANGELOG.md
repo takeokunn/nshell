@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-21
+
+### Added
+- `count` builtin (fish-style): prints the number of arguments and exits 0 when
+  there is at least one, otherwise 1 — pairs naturally with `$argv`
+  (`count $argv`). Registered for `type` and tab-completion.
+
 ## [0.3.0] - 2026-06-21
 
 ### Added

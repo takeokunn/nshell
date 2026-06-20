@@ -129,6 +129,13 @@
                        (format out "~d~%" index))))
                  (if indexes 0 1)))))))
 
+(defun %builtin-count (context args)
+  "Print the number of ARGS (like fish's count). Exit status is 0 when there is
+at least one argument, otherwise 1 -- which makes `count $argv` usable in tests."
+  (declare (ignore context))
+  (let ((n (length args)))
+    (values (format nil "~d~%" n) (if (plusp n) 0 1))))
+
 (defun %builtin-help (context args)
   (declare (ignore context))
   (if args
