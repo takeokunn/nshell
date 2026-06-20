@@ -1,5 +1,5 @@
 (asdf:defsystem "nshell"
-  :version "0.2.1"
+  :version "0.2.2"
   :author "nshell contributors"
   :license "MIT"
   :homepage "https://github.com/takeokunn/nshell"
@@ -128,7 +128,7 @@
 	   (:file "main")))
 
 (asdf:defsystem "nshell/test"
-  :version "0.2.1"
+  :version "0.2.2"
   :author "nshell contributors"
   :license "MIT"
   :description "Test system for nshell"

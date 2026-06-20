@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-21
+
+### Changed
+- CI hardening: environment-dependent integration tests (PTY round-trips,
+  spawning `/bin/cat` / `stty`) are now skipped inside the hermetic Nix build
+  sandbox — where those facilities don't exist — and instead run in a dedicated
+  non-sandboxed CI job that has them. This makes `nix flake check` reliably green
+  on Linux and macOS while preserving real integration coverage. Also removed the
+  shut-down `magic-nix-cache-action` from the workflows.
+
 ## [0.2.1] - 2026-06-21
 
 ### Fixed
