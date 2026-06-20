@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-21
+
+### Fixed
+- External commands now inherit the real process environment (including `PATH`)
+  when the shell has not exported any variables yet — previously they were
+  spawned with an empty environment, so commands could not be found via `PATH`
+  in batch mode and in non-REPL execution paths. This also makes the
+  external-command/pipeline/PTY tests pass under the hermetic Linux CI sandbox.
+
 ## [0.2.0] - 2026-06-21
 
 ### Added

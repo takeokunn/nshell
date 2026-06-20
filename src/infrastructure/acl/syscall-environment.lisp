@@ -5,5 +5,9 @@
 Set by the REPL from the current shell environment.")
 
 (defun %get-environment ()
-  "Return the exported environment list for subprocess execution."
-  (or *exported-environment* nil))
+  "Return the environment list for subprocess execution. When the shell has
+exported variables, use them; otherwise inherit the real process environment so
+child processes still receive a PATH (and can be found via :search)."
+  (or *exported-environment*
+      #+sbcl (sb-ext:posix-environ)
+      #-sbcl nil))
