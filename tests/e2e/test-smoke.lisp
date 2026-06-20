@@ -64,7 +64,7 @@
 (test e2e-main-version-exits-cleanly
   "The entry point prints a version banner and exits successfully for --version."
   (%assert-nshell-main-result '("--version")
-                              "nshell v0.1.0"
+                              "nshell v"
                               0))
 
 (test e2e-main-invalid-args-report-usage

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-21
+
 ### Added
 - Vi key bindings (opt-in via `NSHELL_VI_MODE=1`): `ESC` enters vi normal mode,
   with motions (`h l 0 ^ $ w b e`), insert entries (`i a I A`), edits

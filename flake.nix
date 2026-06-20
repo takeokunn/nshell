@@ -33,7 +33,7 @@
         {
           default = pkgs.sbcl.buildASDFSystem {
             pname = "nshell";
-            version = "0.1.0";
+            version = "0.2.0";
             src = src;
             systems = [ "nshell" ];
             lispLibs = [];
@@ -46,6 +46,9 @@
               (sb-ext:save-lisp-and-die "nshell"
                 :executable t
                 :compression t
+                ;; Stop the SBCL C runtime from intercepting --version/--help and
+                ;; other runtime flags before nshell:main runs.
+                :save-runtime-options t
                 :toplevel #'nshell:main)
             '';
             installPhase = ''
@@ -65,7 +68,7 @@
 
           test = pkgs.sbcl.buildASDFSystem {
             pname = "nshell-test";
-            version = "0.1.0";
+            version = "0.2.0";
             src = src;
             systems = [ "nshell/test" ];
             lispLibs = [ pkgs.sbclPackages.fiveam ];
@@ -90,7 +93,7 @@
         # Run the full test suite (332 tests)
         test = pkgs.sbcl.buildASDFSystem {
           pname = "nshell-test-check";
-          version = "0.1.0";
+          version = "0.2.0";
           src = src;
           systems = [ "nshell/test" ];
           lispLibs = [ pkgs.sbclPackages.fiveam ];

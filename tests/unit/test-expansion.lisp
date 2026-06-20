@@ -33,6 +33,14 @@
                (nshell.domain.expansion:expand-double-quoted "value=$FOO"
                                                              (test-expansion-env)))))
 
+(test double-quoted-expands-arithmetic
+  "Arithmetic $((...)) is evaluated inside double quotes (POSIX)."
+  (let ((env (test-expansion-env)))            ; FOO = bar
+    (is (string= "sum=7" (nshell.domain.expansion:expand-double-quoted
+                          "sum=$((3 + 4))" env)))
+    (is (string= "bar-3" (nshell.domain.expansion:expand-double-quoted
+                          "$FOO-$((1+2))" env)))))
+
 (test double-quoted-suppresses-globbing
   "Double-quoted contents must not be glob-expanded."
   (is (string= "*"

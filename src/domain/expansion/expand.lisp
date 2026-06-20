@@ -382,6 +382,7 @@ returning the (possibly multiple) resulting fields."
 
 (defun expand-double-quoted (input env)
   "Expand INPUT as the contents of a double-quoted string.
-Variables are expanded, but tilde, globbing, and word-splitting are suppressed
-\(POSIX semantics), so the result is always a single string."
-  (expand-variables input env))
+Arithmetic ($((...))) and variables are expanded, but tilde, globbing, and
+word-splitting are suppressed (POSIX semantics), so the result is always a
+single string. Command substitution is applied by the caller before this."
+  (expand-variables (expand-arithmetic input env) env))

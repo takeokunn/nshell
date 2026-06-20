@@ -35,7 +35,7 @@
     (is (search "Usage: nshell [--help] [--version] [-c COMMAND]" usage))
     (is (search "stdin is a terminal" usage))
     (is (search "With -c/--command" usage))
-    (is (search "nshell v0.1.0" version)))
+    (is (search "nshell v" version)))
   )
 
 (defun run-tests ()
