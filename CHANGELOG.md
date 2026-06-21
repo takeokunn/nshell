@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-06-21
+
+### Added
+- Man page (`man nshell`): a `nshell(1)` manual page documenting options, key
+  bindings (Emacs and vi), expansions, control flow, builtins, and environment
+  variables. It is installed into `share/man/man1` by the Nix package.
+
 ## [0.3.2] - 2026-06-21
 
 ### Added

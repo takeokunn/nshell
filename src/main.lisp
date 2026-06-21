@@ -39,7 +39,7 @@
   (format stream "With -c/--command, nshell executes COMMAND once in batch mode.~%"))
 
 (defun %print-version (&optional (stream *standard-output*))
-  (format stream "nshell v0.3.2 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
+  (format stream "nshell v0.3.3 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
           (lisp-implementation-version)))
 
 (defun %fatal-error (error)

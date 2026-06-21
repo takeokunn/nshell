@@ -33,7 +33,7 @@
         {
           default = pkgs.sbcl.buildASDFSystem {
             pname = "nshell";
-            version = "0.3.2";
+            version = "0.3.3";
             src = src;
             systems = [ "nshell" ];
             lispLibs = [];
@@ -55,6 +55,10 @@
               runHook preInstall
               mkdir -p $out/bin
               cp nshell $out/bin/
+              if [ -f man/nshell.1 ]; then
+                mkdir -p $out/share/man/man1
+                cp man/nshell.1 $out/share/man/man1/nshell.1
+              fi
               runHook postInstall
             '';
             meta = with pkgs.lib; {
@@ -68,7 +72,7 @@
 
           test = pkgs.sbcl.buildASDFSystem {
             pname = "nshell-test";
-            version = "0.3.2";
+            version = "0.3.3";
             src = src;
             systems = [ "nshell/test" ];
             lispLibs = [ pkgs.sbclPackages.fiveam ];
@@ -93,7 +97,7 @@
         # Run the full test suite (332 tests)
         test = pkgs.sbcl.buildASDFSystem {
           pname = "nshell-test-check";
-          version = "0.3.2";
+          version = "0.3.3";
           src = src;
           systems = [ "nshell/test" ];
           lispLibs = [ pkgs.sbclPackages.fiveam ];

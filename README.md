@@ -57,6 +57,7 @@ Or build a binary into your profile:
 ```sh
 nix profile install github:takeokunn/nshell
 nshell
+man nshell   # the manual page is installed alongside the binary
 ```
 
 ### One-off command

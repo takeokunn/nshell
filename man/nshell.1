@@ -1,0 +1,140 @@
+.TH NSHELL 1 "2026-06-21" "nshell 0.3.3" "User Commands"
+.SH NAME
+nshell \- a modern, fish-inspired interactive shell written in Common Lisp
+.SH SYNOPSIS
+.B nshell
+.RB [ \-\-help ]
+.RB [ \-\-version ]
+.RB [ \-c
+.IR COMMAND ]
+.SH DESCRIPTION
+.B nshell
+is an interactive command-line shell that emphasizes the interactive
+experience: real-time syntax highlighting, history-aware autosuggestions,
+fish-style abbreviations, and a fast, context-aware completion engine.
+.PP
+When started with standard input connected to a terminal,
+.B nshell
+runs an interactive read-eval-print loop. Otherwise it reads commands from
+standard input in batch mode. With
+.BR \-c ,
+it executes a single
+.I COMMAND
+and exits.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary and exit.
+.TP
+.BR \-V ", " \-\-version
+Print version information and exit.
+.TP
+.BI \-c " COMMAND" "\fR, \fB\-\-command " COMMAND
+Execute
+.I COMMAND
+once in batch mode and exit with its status.
+.SH KEY BINDINGS
+By default the line editor uses Emacs-style key bindings, including cursor
+motion (\fBC\-a\fR, \fBC\-e\fR, \fBM\-f\fR, \fBM\-b\fR), editing (\fBC\-k\fR,
+\fBC\-u\fR, \fBC\-w\fR, \fBC\-y\fR), undo (\fBC\-_\fR), incremental history
+search (\fBC\-r\fR), and autosuggestion acceptance (\fBRight\fR, \fBC\-f\fR).
+.PP
+Setting the environment variable
+.B NSHELL_VI_MODE
+to a non-empty value (other than 0/false/no) enables vi key bindings: press
+.B ESC
+to enter normal mode, which supports motions (\fBh l 0 ^ $ w b e\fR), insert
+entries (\fBi a I A\fR), edits (\fBx D C s\fR), operators (\fBdd cc dw cw\fR),
+and \fBj\fR/\fBk\fR for history.
+.SH EXPANSIONS
+.B nshell
+performs, in order, brace expansion (\fB{a,b}\fR, \fB{1..5}\fR), tilde
+expansion (\fB~\fR), arithmetic expansion (\fB$((expr))\fR), variable and
+parameter expansion, command substitution (\fB$(cmd)\fR and fish-style
+\fB(cmd)\fR), and globbing (\fB* ? [\&.\&.\&.]\fR).
+.PP
+Parameter expansion supports \fB${VAR}\fR, defaults \fB${VAR:-word}\fR and
+relatives (\fB:= :+ :?\fR), length \fB${#VAR}\fR, prefix/suffix stripping
+(\fB${VAR#pat} ## % %%\fR), and substitution (\fB${VAR/pat/rep} //\fR).
+.PP
+Double quotes suppress globbing and word-splitting but allow variable,
+arithmetic, and command-substitution expansion; single quotes are fully
+literal. File-descriptor redirections \fB2> 2>> 2>&1 &> &>>\fR and the usual
+\fB> >> <\fR are supported, as are pipelines (\fB|\fR), logical operators
+(\fB&& ||\fR), sequencing (\fB;\fR), and background execution (\fB&\fR).
+.SH CONTROL FLOW
+Fish-style control flow is available: \fBif\fR, \fBfor\fR, \fBwhile\fR,
+\fBswitch\fR, \fBbegin\fR/\fBend\fR, and user-defined \fBfunction\fRs. A
+function's arguments are available as \fB$argv\fR and indexed \fB$argv[N]\fR.
+.SH BUILTINS
+.B nshell
+provides the following builtins:
+.BR alias ,
+.BR abbr ,
+.BR bg ,
+.BR cd ,
+.BR complete ,
+.BR contains ,
+.BR count ,
+.BR disown ,
+.BR echo ,
+.BR exec ,
+.BR exit ,
+.BR export ,
+.BR false ,
+.BR fg ,
+.BR function ,
+.BR help ,
+.BR history ,
+.BR jobs ,
+.BR ls ,
+.BR not ,
+.BR pwd ,
+.BR read ,
+.BR seq ,
+.BR set ,
+.BR source ,
+.BR string ,
+.BR test ,
+.BR true ,
+.BR type ,
+.BR which .
+Run
+.B help
+inside the shell for details.
+.SH ENVIRONMENT
+.TP
+.B NSHELL_VI_MODE
+When set to a non-empty value, enables vi key bindings (see KEY BINDINGS).
+.TP
+.B HOME
+Used for tilde expansion.
+.TP
+.B PATH
+Searched for external commands.
+.SH EXAMPLES
+Run a one-off pipeline:
+.RS
+.EX
+nshell \-c 'echo hello | string upper'
+.EE
+.RE
+.PP
+Iterate over a generated sequence:
+.RS
+.EX
+for i in (seq 1 5); echo $i; end
+.EE
+.RE
+.SH EXIT STATUS
+.B nshell
+exits with the status of the last command executed, or 0 on a clean
+interactive exit.
+.SH SEE ALSO
+.BR fish (1),
+.BR bash (1),
+.BR zsh (1)
+.SH BUGS
+Report issues at <https://github.com/takeokunn/nshell/issues>.
+.SH AUTHORS
+The nshell authors.
