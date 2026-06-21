@@ -337,24 +337,35 @@ handle it later."
         (%source-function-definition-finish context name body inline-body inline-lines remaining source-path)
         (values nil (format nil "source: function ~a missing end~%" name) 2))))
 
+(defun %comment-or-blank-source-line-p (line)
+  "True for blank lines and whole-line comments (including a leading #! shebang),
+which are skipped rather than parsed."
+  (let ((trimmed (string-trim '(#\Space #\Tab #\Newline #\Return) line)))
+    (or (string= trimmed "")
+        (char= (char trimmed 0) #\#))))
+
 (defun %source-lines (context lines &optional source-path)
   (let ((output nil)
         (code 0)
         (remaining lines))
     (loop while remaining
           for line = (pop remaining)
-          for function-name = (%function-start-p line)
-          do (if function-name
-                 (multiple-value-bind (tail chunk exit-code)
-                     (%source-function-definition context function-name line remaining source-path)
-                   (setf remaining tail
-                         code exit-code)
-                   (when chunk (push chunk output)))
-                 (multiple-value-bind (source-form tail)
-                     (%collect-source-form line remaining)
-                   (setf remaining tail)
-                   (multiple-value-bind (chunk exit-code)
-                       (%execute-source-line context source-form)
-                     (when chunk (push chunk output))
-                     (setf code exit-code)))))
+          do (cond
+               ;; Skip blank lines and whole-line comments / shebangs.
+               ((%comment-or-blank-source-line-p line) nil)
+               ((%function-start-p line)
+                (multiple-value-bind (tail chunk exit-code)
+                    (%source-function-definition context (%function-start-p line)
+                                                 line remaining source-path)
+                  (setf remaining tail
+                        code exit-code)
+                  (when chunk (push chunk output))))
+               (t
+                (multiple-value-bind (source-form tail)
+                    (%collect-source-form line remaining)
+                  (setf remaining tail)
+                  (multiple-value-bind (chunk exit-code)
+                      (%execute-source-line context source-form)
+                    (when chunk (push chunk output))
+                    (setf code exit-code))))))
     (values (apply #'concatenate 'string (nreverse output)) code)))

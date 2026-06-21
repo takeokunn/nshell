@@ -1,4 +1,4 @@
-.TH NSHELL 1 "2026-06-21" "nshell 0.3.3" "User Commands"
+.TH NSHELL 1 "2026-06-21" "nshell 0.4.0" "User Commands"
 .SH NAME
 nshell \- a modern, fish-inspired interactive shell written in Common Lisp
 .SH SYNOPSIS
@@ -7,6 +7,8 @@ nshell \- a modern, fish-inspired interactive shell written in Common Lisp
 .RB [ \-\-version ]
 .RB [ \-c
 .IR COMMAND ]
+.RI [ SCRIPT
+.RI [ ARGS .\|.\|.]]
 .SH DESCRIPTION
 .B nshell
 is an interactive command-line shell that emphasizes the interactive
@@ -20,7 +22,12 @@ standard input in batch mode. With
 .BR \-c ,
 it executes a single
 .I COMMAND
-and exits.
+and exits. Given a
+.I SCRIPT
+file argument, it runs the script (with multiline blocks); any following
+.I ARGS
+are exposed to the script as
+.BR $argv .
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help

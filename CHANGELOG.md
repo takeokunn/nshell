@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.3] - 2026-06-21
+## [0.4.0] - 2026-06-21
+
+### Added
+- Script file execution: `nshell SCRIPT [ARGS...]` runs a script file, with full
+  support for multiline blocks (functions, if/for/while/switch/begin) via the
+  block-aware reader. Any trailing arguments are exposed to the script as
+  `$argv`. An `examples/greet.nsh` script demonstrates the feature.
+
+### Fixed
+- Whole-line comments (and a leading `#!` shebang) in scripts and `source`d files
+  are now skipped instead of causing a parse error.
 
 ### Added
 - Man page (`man nshell`): a `nshell(1)` manual page documenting options, key

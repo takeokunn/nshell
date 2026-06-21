@@ -10,6 +10,12 @@
   #+sbcl (rest sb-ext:*posix-argv*)
   #-sbcl nil)
 
+(defun %flag-argument-p (argument)
+  "Return T when ARGUMENT looks like an option flag (starts with a dash)."
+  (and (stringp argument)
+       (plusp (length argument))
+       (char= (char argument 0) #\-)))
+
 (defun %cli-action (arguments)
   "Classify top-level CLI arguments."
   (cond ((or (member "--help" arguments :test #'string=)
@@ -24,6 +30,10 @@
          :command)
         ((null arguments)
          :run)
+        ;; A leading non-flag argument names a script file to execute; any
+        ;; remaining arguments become the script's $argv.
+        ((not (%flag-argument-p (first arguments)))
+         :script)
         (t
          :invalid)))
 
@@ -32,14 +42,15 @@
   (second arguments))
 
 (defun %print-usage (&optional (stream *standard-output*))
-  (format stream "Usage: nshell [--help] [--version] [-c COMMAND]~%")
+  (format stream "Usage: nshell [--help] [--version] [-c COMMAND] [SCRIPT [ARGS...]]~%")
   (format stream "~%")
   (format stream "Without arguments, nshell starts an interactive shell when~%")
   (format stream "stdin is a terminal and reads batch input from stdin otherwise.~%")
-  (format stream "With -c/--command, nshell executes COMMAND once in batch mode.~%"))
+  (format stream "With -c/--command, nshell executes COMMAND once in batch mode.~%")
+  (format stream "With a SCRIPT file argument, nshell runs the script (ARGS are $argv).~%"))
 
 (defun %print-version (&optional (stream *standard-output*))
-  (format stream "nshell v0.3.3 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
+  (format stream "nshell v0.4.0 - fish-inspired shell in Common Lisp (SBCL ~a)~%"
           (lisp-implementation-version)))
 
 (defun %fatal-error (error)
@@ -61,6 +72,9 @@
                  (:command
                   (nshell.presentation::run-repl-batch
                    :line (%cli-command arguments)))
+                 (:script
+                  (nshell.presentation::run-repl-script
+                   (first arguments) (rest arguments)))
                  (:invalid
                   (%print-usage *error-output*)
                   1)

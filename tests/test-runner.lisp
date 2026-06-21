@@ -34,7 +34,9 @@ integration tests are skipped here and exercised by the non-sandboxed CI job."
   (is (eq :command (nshell::%cli-action '("-c" "echo hello"))))
   (is (eq :command (nshell::%cli-action '("--command" "echo hello"))))
   (is (eq :run (nshell::%cli-action nil)))
-  (is (eq :invalid (nshell::%cli-action '("script"))))
+  ;; A leading non-flag argument names a script file (with optional $argv).
+  (is (eq :script (nshell::%cli-action '("script"))))
+  (is (eq :script (nshell::%cli-action '("script.nsh" "arg1" "arg2"))))
   (is (eq :invalid (nshell::%cli-action '("-c"))))
   (is (eq :invalid (nshell::%cli-action '("--unknown")))))
 

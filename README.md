@@ -66,6 +66,16 @@ man nshell   # the manual page is installed alongside the binary
 nshell -c 'echo hello | string upper'
 ```
 
+### Run a script
+
+```sh
+nshell examples/greet.nsh World
+```
+
+Script files support multiline blocks (functions, `if`/`for`/`while`/`switch`),
+comments, and a `#!` shebang; arguments after the script name are available as
+`$argv`. See [`examples/`](./examples) for a runnable sample.
+
 ### CLI
 
 ```

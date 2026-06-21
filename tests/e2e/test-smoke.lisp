@@ -68,11 +68,24 @@
                               0))
 
 (test e2e-main-invalid-args-report-usage
-  "The entry point rejects unsupported arguments with a usage message."
-  (%assert-nshell-main-result '("script")
+  "The entry point rejects unsupported option flags with a usage message."
+  (%assert-nshell-main-result '("--unknown")
                               nil
                               1
                               :expected-error "Usage: nshell [--help] [--version] [-c COMMAND]"))
+
+(test e2e-run-script-file-executes-multiline-blocks
+  "Running a script file executes multiline blocks and exposes $argv."
+  (with-temporary-output-file (path :prefix "nshell-script")
+    (with-open-file (out path :direction :output :if-exists :supersede
+                              :if-does-not-exist :create)
+      (write-string (format nil "function show~%echo hi $argv[1]~%end~%for i in (seq 1 2)~%echo n=$i~%end~%show $argv~%")
+                    out))
+    (let ((output (capture-standard-output
+                    (nshell.presentation::run-repl-script path '("World")))))
+      (is (search "n=1" output))
+      (is (search "n=2" output))
+      (is (search "hi World" output)))))
 
 (test e2e-main-command-executes-once
   "The entry point executes a single batch command with -c."
