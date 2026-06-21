@@ -253,6 +253,25 @@ echo is /usr/bin/echo
       :code 1
       :output (format nil "0~%"))))
 
+(test seq-prints-integer-sequences
+  "seq prints integer ranges with optional first/step, one per line."
+  (with-builtins-context (context)
+    (assert-builtin-call (context "seq" '("3"))
+      :code 0 :output (format nil "1~%2~%3~%"))
+    (assert-builtin-call (context "seq" '("2" "5"))
+      :code 0 :output (format nil "2~%3~%4~%5~%"))
+    (assert-builtin-call (context "seq" '("2" "2" "8"))
+      :code 0 :output (format nil "2~%4~%6~%8~%"))
+    (assert-builtin-call (context "seq" '("3" "-1" "1"))
+      :code 0 :output (format nil "3~%2~%1~%"))
+    ;; descending with positive step yields nothing
+    (assert-builtin-call (context "seq" '("5" "1"))
+      :code 0 :output-null t)
+    (assert-builtin-call (context "seq" '("1" "0" "5"))
+      :code 2 :output (format nil "seq: STEP must not be zero~%"))
+    (assert-builtin-call (context "seq" '("x"))
+      :code 2 :output (format nil "seq: arguments must be integers~%"))))
+
 (test contains-tests-membership-without-output
   "contains returns success when the needle appears in the value list."
   (with-builtins-context (context)

@@ -130,6 +130,10 @@
          :synopsis "count [values...]"
          :description "print the number of arguments"
          :flags '())
+   (list :command "seq"
+         :synopsis "seq [FIRST [STEP]] LAST"
+         :description "print a sequence of integers"
+         :flags '())
    (list :command "not"
          :synopsis "not command [args...]"
          :description "invert command status")))

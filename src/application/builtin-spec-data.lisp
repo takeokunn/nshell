@@ -27,6 +27,7 @@
     ("not" . %builtin-not)
     ("pwd" . %builtin-pwd)
     ("read" . %builtin-read)
+    ("seq" . %builtin-seq)
     ("set" . %builtin-set)
     ("source" . %builtin-source)
     ("." . %builtin-source)

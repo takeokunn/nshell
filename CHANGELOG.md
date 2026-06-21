@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-21
+
+### Added
+- `seq` builtin: print a sequence of integers (`seq LAST`, `seq FIRST LAST`,
+  `seq FIRST STEP LAST`, with negative STEP for descending) — pairs with for
+  loops, e.g. `for i in (seq 1 10)`. Registered for `type` and tab-completion.
+
 ## [0.3.1] - 2026-06-21
 
 ### Added

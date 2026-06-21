@@ -99,8 +99,8 @@ Inside `nix develop`, you can load the system into a REPL:
 
 `alias`, `abbr`, `bg`, `cd`, `complete`, `contains`, `count`, `disown`, `echo`,
 `exec`, `exit`, `export`, `false`, `fg`, `function`, `help`, `history`, `jobs`,
-`ls`, `not`, `pwd`, `read`, `set`, `source`, `string`, `test`, `true`, `type`,
-`which`.
+`ls`, `not`, `pwd`, `read`, `seq`, `set`, `source`, `string`, `test`, `true`,
+`type`, `which`.
 
 Run `help` inside nshell for details.
 

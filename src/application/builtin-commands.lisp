@@ -136,6 +136,41 @@ at least one argument, otherwise 1 -- which makes `count $argv` usable in tests.
   (let ((n (length args)))
     (values (format nil "~d~%" n) (if (plusp n) 0 1))))
 
+(defun %seq-parse-args (args)
+  "Parse seq ARGS into (values FIRST STEP LAST) integers, or NIL on bad input.
+Forms: seq LAST | seq FIRST LAST | seq FIRST STEP LAST."
+  (handler-case
+      (let ((nums (mapcar (lambda (a) (parse-integer a :junk-allowed nil)) args)))
+        (case (length nums)
+          (1 (values 1 1 (first nums)))
+          (2 (values (first nums) 1 (second nums)))
+          (3 (values (first nums) (second nums) (third nums)))
+          (t nil)))
+    (error () nil)))
+
+(defun %seq-values (first step last)
+  (cond
+    ((zerop step) nil)
+    ((plusp step) (loop for i from first to last by step collect i))
+    (t (loop for i from first downto last by (- step) collect i))))
+
+(defun %builtin-seq (context args)
+  "Print a sequence of integers, one per line (like seq / fish's seq).
+Usage: seq LAST | seq FIRST LAST | seq FIRST STEP LAST. Useful with for loops:
+`for i in (seq 1 10)`."
+  (declare (ignore context))
+  (if (or (null args) (> (length args) 3))
+      (values (format nil "seq: usage: seq [FIRST [STEP]] LAST~%") 2)
+      (multiple-value-bind (first step last) (%seq-parse-args args)
+        (cond
+          ((null first)
+           (values (format nil "seq: arguments must be integers~%") 2))
+          ((zerop step)
+           (values (format nil "seq: STEP must not be zero~%") 2))
+          (t
+           (let ((vals (%seq-values first step last)))
+             (values (when vals (format nil "~{~d~%~}" vals)) 0)))))))
+
 (defun %builtin-help (context args)
   (declare (ignore context))
   (if args
